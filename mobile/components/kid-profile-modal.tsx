@@ -23,6 +23,37 @@ const WEEKLY_DATA = [
   { day: 'Sun', correct: 1, total: 10 },
 ];
 
+const AVG_TIME_DATA = [
+  { day: 'Mon', seconds: 18 },
+  { day: 'Tue', seconds: 25 },
+  { day: 'Wed', seconds: 12 },
+  { day: 'Thu', seconds: 22 },
+  { day: 'Fri', seconds: 10 },
+  { day: 'Sat', seconds: 30 },
+  { day: 'Sun', seconds: 15 },
+];
+
+const TOPIC_ACCURACY = [
+  { topic: 'Math', correct: 18, total: 24 },
+  { topic: 'Science', correct: 9, total: 12 },
+  { topic: 'Geography', correct: 5, total: 10 },
+  { topic: 'Language', correct: 7, total: 8 },
+];
+
+const SUMMARY_STATS = {
+  totalAttempted: 54,
+  avgAccuracy: 72,
+  currentStreak: 4,
+  avgTimeSec: 19,
+};
+
+const RECOMMENDATIONS = [
+  { topic: 'Geography', reason: 'Accuracy dropped to 50% this week' },
+  { topic: 'Fractions', reason: 'New topic matching current math level' },
+  { topic: 'Reading Comprehension', reason: 'Builds on strong language skills' },
+  { topic: 'Basic Physics', reason: 'Complements science interest' },
+];
+
 const YELLOW = '#FFD600';
 const DARK = '#2E2E00';
 const DARK_OLIVE = '#3D3B00';
@@ -46,6 +77,7 @@ export function KidProfileModal({
   const [showIntervalPicker, setShowIntervalPicker] = useState(false);
   const [showTopicEditor, setShowTopicEditor] = useState(false);
   const [showWeeklyChart, setShowWeeklyChart] = useState(false);
+  const [showRecommendations, setShowRecommendations] = useState(false);
   const [newTopic, setNewTopic] = useState('');
 
   if (!kid) return null;
@@ -69,6 +101,7 @@ export function KidProfileModal({
     setShowIntervalPicker(false);
     setShowTopicEditor(false);
     setShowWeeklyChart(false);
+    setShowRecommendations(false);
     setNewTopic('');
     onClose();
   };
@@ -80,11 +113,13 @@ export function KidProfileModal({
       animationType="fade"
       onRequestClose={handleClose}
     >
-      <Pressable style={styles.backdrop} onPress={handleClose}>
-        <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+        <View style={styles.card}>
           <ScrollView
             showsVerticalScrollIndicator={false}
-            bounces={false}
+            bounces
+            nestedScrollEnabled
           >
             {/* Avatar + Name */}
             <View style={styles.header}>
@@ -146,34 +181,146 @@ export function KidProfileModal({
             </TouchableOpacity>
 
             {showWeeklyChart && (
-              <View style={styles.chartSection}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionIcon}>📊</Text>
-                  <Text style={styles.sectionTitle}>Past Week</Text>
+              <>
+                {/* Summary Stats */}
+                <View style={styles.statsGrid}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{SUMMARY_STATS.totalAttempted}</Text>
+                    <Text style={styles.statLabel}>Questions</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{SUMMARY_STATS.avgAccuracy}%</Text>
+                    <Text style={styles.statLabel}>Accuracy</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{SUMMARY_STATS.currentStreak}d</Text>
+                    <Text style={styles.statLabel}>Streak</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statValue}>{SUMMARY_STATS.avgTimeSec}s</Text>
+                    <Text style={styles.statLabel}>Avg Time</Text>
+                  </View>
                 </View>
-                <View style={styles.chartContainer}>
-                  {WEEKLY_DATA.map((d) => {
-                    const pct = d.total > 0 ? (d.correct / d.total) * 100 : 0;
-                    return (
-                      <View key={d.day} style={styles.chartColumn}>
-                        <Text style={styles.chartFraction}>
-                          {d.correct}/{d.total}
-                        </Text>
-                        <View style={styles.chartBarBg}>
-                          <View
-                            style={[
-                              styles.chartBarFill,
-                              { height: `${pct}%` },
-                              d.correct <= 1 && styles.chartBarWeak,
-                            pct === 100 && styles.chartBarPerfect,
-                            ]}
-                          />
+
+                {/* Weekly Accuracy Chart */}
+                <View style={styles.chartSection}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionIcon}>📊</Text>
+                    <Text style={styles.sectionTitle}>Weekly Accuracy</Text>
+                  </View>
+                  <View style={styles.chartContainer}>
+                    {WEEKLY_DATA.map((d) => {
+                      const pct = d.total > 0 ? (d.correct / d.total) * 100 : 0;
+                      return (
+                        <View key={d.day} style={styles.chartColumn}>
+                          <Text style={styles.chartFraction}>
+                            {d.correct}/{d.total}
+                          </Text>
+                          <View style={styles.chartBarBg}>
+                            <View
+                              style={[
+                                styles.chartBarFill,
+                                { height: `${pct}%` },
+                                d.correct <= 1 && styles.chartBarWeak,
+                                pct === 100 && styles.chartBarPerfect,
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.chartDay}>{d.day}</Text>
                         </View>
-                        <Text style={styles.chartDay}>{d.day}</Text>
-                      </View>
-                    );
-                  })}
+                      );
+                    })}
+                  </View>
                 </View>
+
+                {/* Avg Time Per Question Chart */}
+                <View style={styles.chartSection}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionIcon}>⏱</Text>
+                    <Text style={styles.sectionTitle}>Avg Time / Question</Text>
+                  </View>
+                  <View style={styles.hBarList}>
+                    {AVG_TIME_DATA.map((d) => {
+                      const maxSec = Math.max(...AVG_TIME_DATA.map((x) => x.seconds));
+                      const pct = maxSec > 0 ? (d.seconds / maxSec) * 100 : 0;
+                      return (
+                        <View key={d.day} style={styles.hBarRow}>
+                          <Text style={styles.hBarLabel}>{d.day}</Text>
+                          <View style={styles.hBarTrack}>
+                            <View
+                              style={[
+                                styles.hBarFill,
+                                { width: `${pct}%` },
+                                d.seconds >= 25 && styles.hBarSlow,
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.hBarValue}>{d.seconds}s</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Topic Accuracy Breakdown */}
+                <View style={styles.chartSection}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionIcon}>🎯</Text>
+                    <Text style={styles.sectionTitle}>Topic Accuracy</Text>
+                  </View>
+                  <View style={styles.hBarList}>
+                    {TOPIC_ACCURACY.map((t) => {
+                      const pct = t.total > 0 ? (t.correct / t.total) * 100 : 0;
+                      return (
+                        <View key={t.topic} style={styles.hBarRow}>
+                          <Text style={[styles.hBarLabel, styles.hBarLabelWide]}>
+                            {t.topic}
+                          </Text>
+                          <View style={styles.hBarTrack}>
+                            <View
+                              style={[
+                                styles.hBarFill,
+                                { width: `${pct}%` },
+                                pct < 60 && styles.hBarWeak,
+                                pct === 100 && styles.hBarPerfect,
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.hBarValue}>{Math.round(pct)}%</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              </>
+            )}
+
+            {/* Recommendations */}
+            <View style={styles.section}>
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                activeOpacity={0.6}
+                onPress={() => setShowRecommendations(!showRecommendations)}
+              >
+                <Text style={styles.sectionIcon}>💡</Text>
+                <Text style={styles.sectionTitle}>Recommendations</Text>
+                <Text style={styles.sectionToggle}>
+                  {showRecommendations ? 'Hide' : `Show ${RECOMMENDATIONS.length}`}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {showRecommendations && (
+              <View style={styles.expandedSection}>
+                {RECOMMENDATIONS.map((r, i) => (
+                  <View
+                    key={r.topic}
+                    style={[styles.recCard, i < RECOMMENDATIONS.length - 1 && styles.recCardBorder]}
+                  >
+                    <Text style={styles.recTopic}>{r.topic}</Text>
+                    <Text style={styles.recReason}>{r.reason}</Text>
+                  </View>
+                ))}
               </View>
             )}
 
@@ -271,8 +418,8 @@ export function KidProfileModal({
           <TouchableOpacity style={styles.closeBtn} onPress={handleClose} activeOpacity={0.7}>
             <Text style={styles.closeBtnText}>Close</Text>
           </TouchableOpacity>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
@@ -340,6 +487,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: DARK,
+  },
+  sectionToggle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: DARK_OLIVE,
+    marginLeft: 'auto',
   },
   sectionBody: {
     fontSize: 14,
@@ -440,6 +593,99 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: DARK_OLIVE,
     marginTop: 4,
+  },
+
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 18,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: '40%',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: DARK,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: DARK_OLIVE,
+    marginTop: 2,
+  },
+
+  hBarList: {
+    paddingLeft: 22,
+    gap: 8,
+    marginTop: 4,
+  },
+  hBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  hBarLabel: {
+    width: 32,
+    fontSize: 11,
+    fontWeight: '600',
+    color: DARK_OLIVE,
+  },
+  hBarLabelWide: {
+    width: 72,
+  },
+  hBarTrack: {
+    flex: 1,
+    height: 14,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 7,
+    overflow: 'hidden',
+    marginHorizontal: 8,
+  },
+  hBarFill: {
+    height: '100%',
+    backgroundColor: YELLOW,
+    borderRadius: 7,
+  },
+  hBarSlow: {
+    backgroundColor: '#FF9800',
+  },
+  hBarWeak: {
+    backgroundColor: '#D32F2F',
+  },
+  hBarPerfect: {
+    backgroundColor: '#4CAF50',
+  },
+  hBarValue: {
+    width: 34,
+    fontSize: 11,
+    fontWeight: '700',
+    color: DARK,
+    textAlign: 'right',
+  },
+
+  recCard: {
+    paddingVertical: 10,
+  },
+  recCardBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
+  },
+  recTopic: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: DARK,
+    marginBottom: 2,
+  },
+  recReason: {
+    fontSize: 12,
+    color: '#777',
+    lineHeight: 17,
   },
 
   actionBtn: {
