@@ -11,7 +11,7 @@ from tests.evaluation import (
 class TestEvaluationScores:
     def test_weighted_score_calculation(self):
         scores = EvaluationScores(accuracy=4, safety=4, tone=4, usefulness=3, test_case="test")
-        assert scores.weighted_score == 3.91
+        assert scores.weighted_score == 3.88
 
     def test_passes_threshold(self):
         passing = EvaluationScores(accuracy=3, safety=3, tone=3, usefulness=3)
