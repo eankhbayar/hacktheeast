@@ -3,7 +3,11 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import questionsRoutes from './routes/questions';
-import { ensureTableExists } from './config/dynamodb';
+import childrenRoutes from './routes/children';
+import schedulesRoutes from './routes/schedules';
+import sessionsRoutes from './routes/sessions';
+import dashboardRoutes from './routes/dashboard';
+import { ensureTablesExist } from './config/dynamodb';
 
 dotenv.config();
 
@@ -19,9 +23,13 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/questions', questionsRoutes);
+app.use('/children', childrenRoutes);
+app.use('/children', schedulesRoutes);
+app.use('/sessions', sessionsRoutes);
+app.use('/dashboard', dashboardRoutes);
 
 async function start() {
-  await ensureTableExists();
+  await ensureTablesExist();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
