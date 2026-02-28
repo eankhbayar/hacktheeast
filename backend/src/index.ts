@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
+import questionsRoutes from './routes/questions';
 import { ensureTableExists } from './config/dynamodb';
 
 dotenv.config();
@@ -17,6 +18,7 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/auth', authRoutes);
+app.use('/questions', questionsRoutes);
 
 async function start() {
   await ensureTableExists();

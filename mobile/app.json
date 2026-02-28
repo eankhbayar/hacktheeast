@@ -10,15 +10,40 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.myapp"
+      "bundleIdentifier": "com.yourcompany.myapp",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio", "fetch", "remote-notification"],
+        "NSAlarmKitUsageDescription": "This app uses alarms to interrupt you at scheduled times with challenges."
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.yourcompany.myapp"],
+        "com.apple.developer.usernotifications.critical-alerts": true
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.yourcompany.myapp"
+      "package": "com.yourcompany.myapp",
+      "permissions": [
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "ios": {
+            "mode": "production"
+          },
+          "sounds": ["./assets/sounds/alarm.mp3"]
+        }
+      ],
+      "expo-secure-store"
+    ],
     "extra": {
       "apiUrl": "http://10.89.73.138:3000"
     }
