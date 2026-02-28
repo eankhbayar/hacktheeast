@@ -1,0 +1,71 @@
+---
+description: High-level architecture and flows for hacktheeast app
+alwaysApply: true
+---
+
+# Architecture Overview
+
+## Summary
+
+Simple React Native app for interrupting kids' scrolling with quizzes. Parents configure via dashboard. Use API placeholders for AI/question generation.
+
+## Key Features
+
+- Parent login / dashboard / settings.
+- Timer-based interruptions.
+- Quiz flow: info/video (placeholder) + multiple-choice question.
+- **Alarmy-style lock-in** – interruption takes over the screen and cannot be dismissed until the required quiz/task is completed.
+- Points on correct answers.
+- Reset timer after each interruption.
+
+## Screens & Components
+
+- Login: Email/password.
+- Dashboard: Kids' stats (weak topics, time spent, suggestions) from API.
+- Settings: Interval, kids' configs (age, topics).
+- Kid Mode: Background timer triggers quiz.
+- Quiz: Display info, question, options. Correct: points++, reset. Wrong: retry.
+
+## Backend APIs (Placeholders)
+
+- Auth: `/login`
+- Dashboard: `/dashboard?userId=xx`
+- Settings: `/settings` (POST)
+- Question: `/generateQuestion?topic=xx&age=xx` → `{question, options, answer, info}`
+- Stats: `/updateStats` (POST)
+
+## Flows
+
+### Parent
+
+- Login.
+- View dashboard.
+- Edit settings → Save.
+- Exit; timer starts.
+
+### Kid
+
+- Timer → full-screen, Alarmy-style Quiz (cannot be easily dismissed or skipped).
+- Info → Question → Answer.
+- Correct: Points, reset, exit.
+- Wrong: Retry.
+- Track time locally, sync later.
+
+## Tech Stack & Implementation Notes
+
+- React Native.
+- State: Context API.
+- Timer: `react-native-background-timer`.
+- Storage: `AsyncStorage`.
+- API: Axios mocks.
+
+## Notes
+
+- Mocks for demo.
+- Minimal UI.
+
+## Open Questions / To Clarify
+
+- ignore that for now, that is for feeding the data into the app – how do agents 1–4, the knowledge base, and the “learning app” from your diagram map onto this simplified architecture?
+- same mobile app – should parent and child experiences live in a single mobile app bundle, or will there be separate apps or modes?
+- always-online – which parts must be offline‑friendly vs. always-online?

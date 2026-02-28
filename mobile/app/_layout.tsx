@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { ChallengeOverlay } from '@/components/challenge-overlay';
 import { configureAlarmKit } from '@/services/alarm-kit';
+import { AppModeProvider } from '@/contexts/app-mode';
 import { AuthProvider } from '@/contexts/auth';
 import { ChallengeProvider } from '@/contexts/challenge';
 import { KidsProvider } from '@/contexts/kids';
@@ -20,6 +21,7 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <AppModeProvider>
       <AuthProvider>
         <KidsProvider>
         <ChallengeProvider>
@@ -27,6 +29,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="child-mode" options={{ headerShown: false, gestureEnabled: false }} />
             <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
           </Stack>
           <ChallengeOverlay />
@@ -34,6 +37,7 @@ export default function RootLayout() {
         </ChallengeProvider>
         </KidsProvider>
       </AuthProvider>
+      </AppModeProvider>
     </ThemeProvider>
   );
 }

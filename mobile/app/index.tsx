@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/hooks/use-auth';
+import { useAppMode } from '@/contexts/app-mode';
 
 export default function Index() {
   const { user, isLoading } = useAuth();
+  const { mode } = useAppMode();
 
   if (isLoading) {
     return (
@@ -12,6 +13,10 @@ export default function Index() {
         <ActivityIndicator size="large" />
       </View>
     );
+  }
+
+  if (mode === 'child') {
+    return <Redirect href="/child-mode" />;
   }
 
   if (!user) {

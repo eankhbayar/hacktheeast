@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,24 +11,25 @@ import {
   StatusBar,
   Text,
   Image,
-  ScrollView,
-  ActivityIndicator,
 } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSequence,
   withTiming,
+  interpolateColor,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
 import { useChallenge } from '@/hooks/use-challenge';
 import { useAuth } from '@/hooks/use-auth';
-import api from '@/services/api';
-import { BlipHead } from '@/images';
-import type { Question, Lesson, AnswerResult, RemediationResult } from '@/types/children';
+import { useAppMode } from '@/contexts/app-mode';
+import { getRandomQuestion, type Question } from '@/lib/questions';
+import { stopAlarmSound } from '@/services/alarm-sound';
+import { BlipHead, BlipRobot } from '@/images';
 
+const TOTAL_QUESTIONS = 3;
+const WRONG_ANSWER_DELAY_MS = 700;
 const ALARM_VIBRATION_PATTERN = [0, 800, 400, 800, 400, 800, 400, 800];
 const HAPTIC_INTERVAL_MS = 1200;
 
@@ -37,26 +38,60 @@ const DARK = '#2E2E00';
 const DARK_OLIVE = '#3D3B00';
 const WHITE = '#FFFFFF';
 
-type OverlayStage = 'loading' | 'questioning' | 'remediation_video' | 'remediation_question' | 'error';
+const ENCOURAGEMENTS = [
+  'Great job!',
+  'You nailed it!',
+  'Awesome work!',
+  'Well done!',
+  'Keep it up!',
+  'Brilliant!',
+];
+
+interface WrongAnswer {
+  questionIndex: number;
+  question: string;
+  correctAnswer: string;
+}
+
+type Phase = 'quiz' | 'success' | 'review';
 
 export function ChallengeOverlay() {
-  const { isChallengeActive, dismissChallenge, activeChildId } = useChallenge();
+  const { isChallengeActive, dismissChallenge, pauseNags } = useChallenge();
   const { user } = useAuth();
+  const { mode } = useAppMode();
   const insets = useSafeAreaInsets();
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [question, setQuestion] = useState<Question | null>(null);
-  const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [stage, setStage] = useState<OverlayStage>('loading');
+
+  // Child-mode multi-question state
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
+  const [phase, setPhase] = useState<Phase>('quiz');
+  const [reviewIndex, setReviewIndex] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
+
+  // Parent-mode single-question state
+  const [singleQuestion, setSingleQuestion] = useState<Question | null>(null);
+
+  // Shared state
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState('');
-  const [strikesRemaining, setStrikesRemaining] = useState<number | null>(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shakeX = useSharedValue(0);
+  const bgFlash = useSharedValue(0);
+
+  const isChildMode = mode === 'child';
+  const canShow = isChallengeActive && (user || isChildMode);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shakeX.value }],
   }));
 
-  const shake = useCallback(() => {
+  const overlayAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(bgFlash.value, [0, 1], [YELLOW, '#D32F2F']),
+  }));
+
+  const shake = () => {
     shakeX.value = withSequence(
       withTiming(-10, { duration: 50 }),
       withTiming(10, { duration: 50 }),
@@ -64,72 +99,54 @@ export function ChallengeOverlay() {
       withTiming(10, { duration: 50 }),
       withTiming(0, { duration: 50 })
     );
-  }, []);
+  };
 
-  const handleGoToHomeAndDismiss = useCallback(async () => {
-    await dismissChallenge();
-    router.replace('/(tabs)');
+  const flashRed = () => {
+    bgFlash.value = withSequence(
+      withTiming(1, { duration: 150 }),
+      withTiming(0, { duration: 350 })
+    );
+  };
+
+  const finishDismiss = useCallback(() => {
+    setPhase('quiz');
+    dismissChallenge();
   }, [dismissChallenge]);
 
-  const triggerSession = useCallback(async () => {
-    if (!activeChildId) {
-      setStage('error');
-      setError('No child profile selected. Select a kid on the home screen.');
-      return;
-    }
-    setStage('loading');
-    setError('');
-    try {
-      const res = await api.post<{ session: { sessionId: string }; question: Question }>(
-        '/sessions/trigger',
-        { childId: activeChildId, triggerType: 'manual' }
-      );
-      setSessionId(res.data.session.sessionId);
-      setQuestion(res.data.question);
-      setStage('questioning');
-      setAnswer('');
-      setStrikesRemaining(3);
-    } catch (err: unknown) {
-      const data = (err as { response?: { data?: { error?: string } } })?.response?.data;
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      setStage('error');
-      setError(
-        status === 404
-          ? 'No child profile found. Select a kid on the home screen to continue.'
-          : status === 409
-            ? 'An active session exists. Ask a parent to unlock from the dashboard.'
-            : (data?.error ?? 'Failed to start challenge')
-      );
-    }
-  }, [activeChildId]);
-
+  // Initialise questions when challenge starts
   useEffect(() => {
-    if (isChallengeActive && user) {
-      triggerSession();
-    }
-  }, [isChallengeActive, user]);
+    if (isChallengeActive && (user || isChildMode)) {
+      pauseNags();
+      stopAlarmSound();
 
-  useEffect(() => {
-    if (!isChallengeActive) {
-      setSessionId(null);
-      setQuestion(null);
-      setLesson(null);
-      setStage('loading');
+      if (isChildMode) {
+        setQuestions(
+          Array.from({ length: TOTAL_QUESTIONS }, () => getRandomQuestion('medium'))
+        );
+        setCurrentIndex(0);
+        setWrongAnswers([]);
+        setPhase('quiz');
+        setReviewIndex(0);
+        setTransitioning(false);
+      } else {
+        setSingleQuestion(getRandomQuestion('medium'));
+      }
+
       setAnswer('');
       setError('');
-      setStrikesRemaining(null);
     }
-  }, [isChallengeActive]);
+  }, [isChallengeActive, user, isChildMode, pauseNags]);
 
+  // Block hardware back button
   useEffect(() => {
-    if (!isChallengeActive || !user) return;
-
+    if (!canShow) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => sub.remove();
-  }, [isChallengeActive, user]);
+  }, [canShow]);
 
+  // Haptic alarm loop — runs only during quiz phase
   useEffect(() => {
-    if (!isChallengeActive || !user) return;
+    if (!canShow || (isChildMode && phase !== 'quiz')) return;
 
     const triggerHaptic = () => {
       if (Platform.OS === 'android') {
@@ -144,116 +161,178 @@ export function ChallengeOverlay() {
 
     return () => {
       clearInterval(interval);
-      if (Platform.OS === 'android') {
-        Vibration.cancel();
-      }
+      if (Platform.OS === 'android') Vibration.cancel();
     };
-  }, [isChallengeActive, user]);
+  }, [canShow, isChildMode, phase]);
 
-  const handleSubmitAnswer = useCallback(async () => {
-    if (!sessionId || !question) return;
-    const submittedAnswer = answer.trim();
-    if (!submittedAnswer) {
-      setError('Please enter an answer');
-      return;
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
+  // ── Child-mode helpers ──
+
+  const goToNextOrFinish = (idx: number, wrongs: WrongAnswer[]) => {
+    const nextIdx = idx + 1;
+    if (nextIdx < TOTAL_QUESTIONS) {
+      setCurrentIndex(nextIdx);
+      setAnswer('');
+    } else if (wrongs.length === 0) {
+      stopAlarmSound();
+      const msg = ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+      setSuccessMessage(msg);
+      setPhase('success');
+      successTimerRef.current = setTimeout(finishDismiss, 2000);
+    } else {
+      setReviewIndex(0);
+      setPhase('review');
     }
-
-    setError('');
-    try {
-      const res = await api.post<AnswerResult>(`/sessions/${sessionId}/answer`, {
-        questionId: question.questionId,
-        answer: submittedAnswer,
-      });
-      const data = res.data;
-
-      if (data.result === 'correct') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        dismissChallenge();
-        return;
-      }
-
-      if (data.result === 'incorrect') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        shake();
-        setAnswer('');
-        if (data.nextQuestion) {
-          setQuestion(data.nextQuestion);
-          setStrikesRemaining(data.strikesRemaining ?? null);
-        }
-        setError('Wrong answer. Try again!');
-        return;
-      }
-
-      if (data.result === 'locked' && data.lesson) {
-        setLesson(data.lesson);
-        setStage('remediation_video');
-        setAnswer('');
-      }
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Failed to submit';
-      setError(msg);
-    }
-  }, [sessionId, question, answer, dismissChallenge, shake]);
-
-  const handleVideoComplete = useCallback(async () => {
-    if (!sessionId) return;
-    try {
-      await api.post(`/sessions/${sessionId}/video-complete`);
-      setStage('remediation_question');
-    } catch {
-      setError('Failed to continue');
-    }
-  }, [sessionId]);
-
-  const handleRemediationAnswer = useCallback(async () => {
-    if (!sessionId || !question) return;
-    const submittedAnswer = answer.trim();
-    if (!submittedAnswer) {
-      setError('Please enter an answer');
-      return;
-    }
-
-    setError('');
-    try {
-      const res = await api.post<RemediationResult>(`/sessions/${sessionId}/remediation-answer`, {
-        answer: submittedAnswer,
-      });
-      const data = res.data;
-
-      if (data.result === 'correct') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        dismissChallenge();
-        return;
-      }
-
-      if (data.result === 'incorrect' && data.rewatchRequired) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        shake();
-        setStage('remediation_video');
-        setAnswer('');
-        setError('Wrong answer. Watch the video again and try again.');
-      }
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Failed to submit';
-      setError(msg);
-    }
-  }, [sessionId, question, answer, dismissChallenge, shake]);
-
-  const handleOptionSelect = (option: string) => {
-    setAnswer(option);
-    setError('');
   };
 
-  if (!isChallengeActive || !user) return null;
+  const handleSubmit = () => {
+    // ── Child mode: 3-question flow ──
+    if (isChildMode) {
+      if (transitioning) return;
+      const currentQ = questions[currentIndex];
+      if (!currentQ) return;
+
+      const normalized = answer.trim().toLowerCase();
+      const expected = currentQ.answer.trim().toLowerCase();
+
+      if (normalized === expected) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        goToNextOrFinish(currentIndex, wrongAnswers);
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        shake();
+        flashRed();
+        setTransitioning(true);
+        const newWrong: WrongAnswer[] = [
+          ...wrongAnswers,
+          {
+            questionIndex: currentIndex,
+            question: currentQ.question,
+            correctAnswer: currentQ.answer,
+          },
+        ];
+        setWrongAnswers(newWrong);
+        setTimeout(() => {
+          setTransitioning(false);
+          goToNextOrFinish(currentIndex, newWrong);
+        }, WRONG_ANSWER_DELAY_MS);
+      }
+      return;
+    }
+
+    // ── Parent mode: single question, retry until correct ──
+    if (!singleQuestion) return;
+    const normalized = answer.trim().toLowerCase();
+    const expected = singleQuestion.answer.trim().toLowerCase();
+
+    if (normalized === expected) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      dismissChallenge();
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      shake();
+      flashRed();
+      setError('Wrong answer. Try again!');
+    }
+  };
+
+  const handleReviewNext = () => {
+    if (reviewIndex < wrongAnswers.length - 1) {
+      setReviewIndex(reviewIndex + 1);
+    } else {
+      const msg = ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+      setSuccessMessage(msg);
+      setPhase('success');
+      successTimerRef.current = setTimeout(finishDismiss, 2000);
+    }
+  };
+
+  if (!canShow) return null;
+
+  // ── Success screen (all 3 correct) ──
+  if (phase === 'success' && isChildMode) {
+    return (
+      <View
+        style={[
+          styles.overlay,
+          styles.successOverlay,
+          { paddingTop: insets.top, paddingBottom: insets.bottom },
+        ]}
+        pointerEvents="auto"
+      >
+        <StatusBar hidden />
+        <Image source={BlipRobot} style={styles.successMascot} resizeMode="contain" />
+        <Text style={styles.successText}>{successMessage}</Text>
+        <Text style={styles.successSub}>Timer restarting...</Text>
+      </View>
+    );
+  }
+
+  // ── Review screen (explanation cards for wrong answers) ──
+  if (phase === 'review' && isChildMode) {
+    const wrong = wrongAnswers[reviewIndex];
+    return (
+      <View
+        style={[
+          styles.overlay,
+          styles.reviewOverlay,
+          { paddingTop: insets.top, paddingBottom: insets.bottom },
+        ]}
+        pointerEvents="auto"
+      >
+        <StatusBar hidden />
+        <View style={styles.reviewInner}>
+          <Text style={styles.reviewTitle}>Let's Review</Text>
+          <Text style={styles.reviewProgress}>
+            {reviewIndex + 1} of {wrongAnswers.length} to review
+          </Text>
+
+          <View style={styles.explanationCard}>
+            <View style={styles.explanationImagePlaceholder}>
+              <Text style={styles.explanationImageIcon}>📚</Text>
+            </View>
+            <Text style={styles.explanationLabel}>
+              Question {wrong.questionIndex + 1} Explanation
+            </Text>
+            <Text style={styles.explanationQuestion}>{wrong.question}</Text>
+            <Text style={styles.explanationAnswer}>
+              Answer: {wrong.correctAnswer}
+            </Text>
+            <Text style={styles.explanationBody}>
+              Lesson content will appear here. This is a placeholder for the
+              learning material related to this question.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.reviewButton}
+            onPress={handleReviewNext}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.reviewButtonText}>
+              {reviewIndex < wrongAnswers.length - 1 ? 'Next' : 'Done'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Quiz screen ──
+  const displayQuestion = isChildMode ? questions[currentIndex] : singleQuestion;
 
   return (
-    <View
+    <Animated.View
       style={[
         styles.overlay,
-        {
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom,
-        },
+        overlayAnimatedStyle,
+        { paddingTop: insets.top, paddingBottom: insets.bottom },
       ]}
       pointerEvents="auto"
     >
@@ -263,105 +342,70 @@ export function ChallengeOverlay() {
         style={styles.inner}
       >
         <Image source={BlipHead} style={styles.mascot} resizeMode="contain" />
-        <Text style={styles.title}>Answer to continue</Text>
-        <Text style={styles.subtitle}>Solve this to unlock your screen</Text>
 
-        {stage === 'loading' && (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator size="large" color={DARK_OLIVE} />
-            <Text style={styles.loadingText}>Loading question...</Text>
+        {isChildMode && (
+          <View style={styles.progressRow}>
+            {Array.from({ length: TOTAL_QUESTIONS }, (_, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.progressDot,
+                  i < currentIndex && styles.progressDotDone,
+                  i === currentIndex && styles.progressDotCurrent,
+                ]}
+              />
+            ))}
           </View>
         )}
 
-        {stage === 'error' && (
+        <Text style={styles.title}>Answer to continue</Text>
+        <Text style={styles.subtitle}>
+          {isChildMode
+            ? `Question ${currentIndex + 1} of ${TOTAL_QUESTIONS}`
+            : 'Solve this to unlock your screen'}
+        </Text>
+
+        {displayQuestion && (
+          <View style={styles.questionCard}>
+            <Text style={styles.questionLabel}>QUESTION</Text>
+            <Text style={styles.questionText}>{displayQuestion.question}</Text>
+          </View>
+        )}
+
+        <Animated.View style={[styles.inputWrap, animatedStyle]}>
+          <TextInput
+            style={styles.input}
+            placeholder="Type your answer..."
+            placeholderTextColor="#A0A0A0"
+            value={answer}
+            onChangeText={(t) => {
+              setAnswer(t);
+              setError('');
+            }}
+            onSubmitEditing={handleSubmit}
+            returnKeyType="done"
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!transitioning}
+          />
+        </Animated.View>
+
+        {error ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity
-              style={styles.button}
-              onPress={handleGoToHomeAndDismiss}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.buttonText}>Select a Kid</Text>
-            </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
-        {stage === 'remediation_video' && lesson && (
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            <View style={styles.questionCard}>
-              <Text style={styles.questionLabel}>WATCH THIS LESSON</Text>
-              <Text style={styles.videoTitle}>{lesson.topic}</Text>
-              <Text style={styles.videoDesc}>{lesson.description}</Text>
-              <Text style={styles.videoNote}>
-                Video: {lesson.durationSeconds}s • {lesson.videoUrl ? 'Open in browser' : 'Placeholder'}
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.button} onPress={handleVideoComplete} activeOpacity={0.8}>
-              <Text style={styles.buttonText}>I&apos;ve watched the video</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
-
-        {(stage === 'questioning' || stage === 'remediation_question') && question && (
-          <>
-            <View style={styles.questionCard}>
-              <Text style={styles.questionLabel}>QUESTION</Text>
-              <Text style={styles.questionText}>{question.questionText}</Text>
-              {strikesRemaining !== null && stage === 'questioning' && (
-                <Text style={styles.strikesText}>{strikesRemaining} tries left</Text>
-              )}
-            </View>
-
-            {question.options && question.options.length > 0 ? (
-              <View style={styles.optionsWrap}>
-                {question.options.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    style={[styles.optionBtn, answer === opt && styles.optionBtnActive]}
-                    onPress={() => handleOptionSelect(opt)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.optionText, answer === opt && styles.optionTextActive]}>{opt}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : (
-              <Animated.View style={[styles.inputWrap, animatedStyle]}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Type your answer..."
-                  placeholderTextColor="#A0A0A0"
-                  value={answer}
-                  onChangeText={(t) => {
-                    setAnswer(t);
-                    setError('');
-                  }}
-                  onSubmitEditing={stage === 'remediation_question' ? handleRemediationAnswer : handleSubmitAnswer}
-                  returnKeyType="done"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </Animated.View>
-            )}
-
-            {error ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
-
-            <TouchableOpacity
-              style={styles.button}
-              onPress={stage === 'remediation_question' ? handleRemediationAnswer : handleSubmitAnswer}
-              activeOpacity={0.8}
-              disabled={!answer.trim()}
-            >
-              <Text style={[styles.buttonText, !answer.trim() && styles.buttonTextDisabled]}>Submit</Text>
-            </TouchableOpacity>
-          </>
-        )}
+        <TouchableOpacity
+          style={[styles.button, transitioning && styles.buttonDisabled]}
+          onPress={handleSubmit}
+          activeOpacity={0.8}
+          disabled={transitioning}
+        >
+          <Text style={styles.buttonText}>Submit</Text>
+        </TouchableOpacity>
       </KeyboardAvoidingView>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -379,19 +423,33 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
   },
-  scroll: {
-    width: '100%',
-    maxHeight: 400,
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
 
   mascot: {
     width: 160,
     height: 160,
     marginBottom: 16,
   },
+
+  // Progress dots
+  progressRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  progressDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  progressDotDone: {
+    backgroundColor: DARK_OLIVE,
+  },
+  progressDotCurrent: {
+    backgroundColor: DARK,
+    transform: [{ scale: 1.3 }],
+  },
+
   title: {
     fontSize: 28,
     fontWeight: '800',
@@ -404,16 +462,6 @@ const styles = StyleSheet.create({
     color: DARK_OLIVE,
     textAlign: 'center',
     marginBottom: 24,
-  },
-
-  loadingWrap: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: DARK_OLIVE,
   },
 
   questionCard: {
@@ -442,54 +490,6 @@ const styles = StyleSheet.create({
     color: DARK,
     textAlign: 'center',
   },
-  strikesText: {
-    fontSize: 12,
-    color: DARK_OLIVE,
-    marginTop: 8,
-  },
-  videoTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: DARK,
-    marginBottom: 8,
-  },
-  videoDesc: {
-    fontSize: 14,
-    color: '#555',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  videoNote: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 12,
-  },
-
-  optionsWrap: {
-    width: '100%',
-    marginBottom: 14,
-  },
-  optionBtn: {
-    backgroundColor: WHITE,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    marginBottom: 10,
-  },
-  optionBtnActive: {
-    borderColor: DARK_OLIVE,
-    backgroundColor: '#FFFDE7',
-  },
-  optionText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: DARK,
-  },
-  optionTextActive: {
-    color: DARK_OLIVE,
-  },
 
   inputWrap: {
     width: '100%',
@@ -517,7 +517,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#FFCDD2',
-    width: '100%',
   },
   errorText: {
     color: '#C62828',
@@ -538,12 +537,128 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
   buttonText: {
     color: YELLOW,
     fontSize: 18,
     fontWeight: '700',
   },
-  buttonTextDisabled: {
-    opacity: 0.6,
+
+  // Success screen
+  successOverlay: {
+    backgroundColor: '#4CAF50',
+  },
+  successMascot: {
+    width: 200,
+    height: 200,
+    marginBottom: 24,
+  },
+  successText: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: WHITE,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  successSub: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+  },
+
+  // Review / explanation screen
+  reviewOverlay: {
+    backgroundColor: '#1A237E',
+  },
+  reviewInner: {
+    width: '100%',
+    maxWidth: 340,
+    padding: 24,
+    alignItems: 'center',
+  },
+  reviewTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: WHITE,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  reviewProgress: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: 24,
+  },
+
+  explanationCard: {
+    backgroundColor: WHITE,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  explanationImagePlaceholder: {
+    width: '100%',
+    height: 140,
+    backgroundColor: '#E8EAF6',
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  explanationImageIcon: {
+    fontSize: 48,
+  },
+  explanationLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1A237E',
+    marginBottom: 8,
+  },
+  explanationQuestion: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: DARK,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  explanationAnswer: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#4CAF50',
+    marginBottom: 12,
+  },
+  explanationBody: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  reviewButton: {
+    backgroundColor: WHITE,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  reviewButtonText: {
+    color: '#1A237E',
+    fontSize: 18,
+    fontWeight: '700',
   },
 });

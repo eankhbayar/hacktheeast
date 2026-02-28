@@ -13,6 +13,16 @@ import type { KidView } from '@/types/children';
 
 const INTERVAL_OPTIONS = [15, 30, 45, 60];
 
+const WEEKLY_DATA = [
+  { day: 'Mon', correct: 5, total: 8 },
+  { day: 'Tue', correct: 3, total: 6 },
+  { day: 'Wed', correct: 7, total: 9 },
+  { day: 'Thu', correct: 4, total: 7 },
+  { day: 'Fri', correct: 6, total: 6 },
+  { day: 'Sat', correct: 2, total: 5 },
+  { day: 'Sun', correct: 1, total: 10 },
+];
+
 const YELLOW = '#FFD600';
 const DARK = '#2E2E00';
 const DARK_OLIVE = '#3D3B00';
@@ -35,6 +45,7 @@ export function KidProfileModal({
 }: KidProfileModalProps) {
   const [showIntervalPicker, setShowIntervalPicker] = useState(false);
   const [showTopicEditor, setShowTopicEditor] = useState(false);
+  const [showWeeklyChart, setShowWeeklyChart] = useState(false);
   const [newTopic, setNewTopic] = useState('');
 
   if (!kid) return null;
@@ -57,6 +68,7 @@ export function KidProfileModal({
   const handleClose = () => {
     setShowIntervalPicker(false);
     setShowTopicEditor(false);
+    setShowWeeklyChart(false);
     setNewTopic('');
     onClose();
   };
@@ -112,6 +124,49 @@ export function KidProfileModal({
                 ))}
               </View>
             </View>
+
+            {/* Show More — Weekly Chart */}
+            <TouchableOpacity
+              style={styles.showMoreBtn}
+              onPress={() => setShowWeeklyChart(!showWeeklyChart)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.showMoreText}>
+                {showWeeklyChart ? 'Show Less' : 'Show More'}
+              </Text>
+            </TouchableOpacity>
+
+            {showWeeklyChart && (
+              <View style={styles.chartSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionIcon}>📊</Text>
+                  <Text style={styles.sectionTitle}>Past Week</Text>
+                </View>
+                <View style={styles.chartContainer}>
+                  {WEEKLY_DATA.map((d) => {
+                    const pct = d.total > 0 ? (d.correct / d.total) * 100 : 0;
+                    return (
+                      <View key={d.day} style={styles.chartColumn}>
+                        <Text style={styles.chartFraction}>
+                          {d.correct}/{d.total}
+                        </Text>
+                        <View style={styles.chartBarBg}>
+                          <View
+                            style={[
+                              styles.chartBarFill,
+                              { height: `${pct}%` },
+                              d.correct <= 1 && styles.chartBarWeak,
+                            pct === 100 && styles.chartBarPerfect,
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.chartDay}>{d.day}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
 
             {/* Set Interval */}
             <TouchableOpacity
@@ -316,6 +371,66 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#C62828',
     fontWeight: '700',
+  },
+
+  showMoreBtn: {
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+  showMoreText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: DARK_OLIVE,
+  },
+
+  chartSection: {
+    marginBottom: 18,
+  },
+  chartContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 130,
+    paddingLeft: 22,
+    paddingRight: 4,
+    marginTop: 4,
+  },
+  chartColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  chartFraction: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: DARK_OLIVE,
+    marginBottom: 4,
+  },
+  chartBarBg: {
+    width: 22,
+    height: 80,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 6,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  chartBarFill: {
+    width: '100%',
+    backgroundColor: YELLOW,
+    borderRadius: 6,
+  },
+  chartBarWeak: {
+    backgroundColor: '#D32F2F',
+  },
+  chartBarPerfect: {
+    backgroundColor: '#4CAF50',
+  },
+  chartDay: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: DARK_OLIVE,
+    marginTop: 4,
   },
 
   actionBtn: {

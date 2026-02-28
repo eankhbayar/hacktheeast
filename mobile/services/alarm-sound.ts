@@ -6,7 +6,7 @@ let isPlaying = false;
 export async function configureAudioSession(): Promise<void> {
   await Audio.setAudioModeAsync({
     playsInSilentModeIOS: true,
-    staysActiveInBackground: false,
+    staysActiveInBackground: true,
     interruptionModeIOS: InterruptionModeIOS.DoNotMix,
     interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
     shouldDuckAndroid: false,

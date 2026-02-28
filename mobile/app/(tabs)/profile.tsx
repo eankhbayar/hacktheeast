@@ -7,15 +7,16 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Image,
+  Modal,
+  Pressable,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
 import { useKids } from '@/contexts/kids';
-import { useAuth } from '@/hooks/use-auth';
+import { KidProfileModal } from '@/components/kid-profile-modal';
+import type { KidProfile } from '@/data/kids';
 import { BlipHead } from '@/images';
-import { Image } from 'react-native';
-
-const AGE_GROUPS = ['5-7', '8-10', '11-13'] as const;
 
 const YELLOW = '#FFD600';
 const DARK = '#2E2E00';
@@ -23,137 +24,66 @@ const DARK_OLIVE = '#3D3B00';
 const WHITE = '#FFFFFF';
 const ACCENT_RED = '#D32F2F';
 
-export default function ProfileScreen() {
-  const { logout } = useAuth();
-  const { kids, loading, error, addKid, removeKid } = useKids();
+export default function SettingsScreen() {
+  const { kids, addKid, removeKid, updateKidInterval, updateKidTopics, toggleKidActive } = useKids();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
-  const [ageGroup, setAgeGroup] = useState<string>('8-10');
-  const [submitting, setSubmitting] = useState(false);
+  const [age, setAge] = useState('');
+  const [selectedKid, setSelectedKid] = useState<KidProfile | null>(null);
 
-  const handleAddKid = async () => {
+  const handleUpdateInterval = (kidId: string, minutes: number) => {
+    updateKidInterval(kidId, minutes);
+  };
+
+  const handleUpdateTopics = (kidId: string, topics: string[]) => {
+    updateKidTopics(kidId, topics);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setName('');
+    setAge('');
+  };
+
+  const handleAddKid = () => {
     const trimmedName = name.trim();
+    const parsedAge = parseInt(age, 10);
     if (!trimmedName) {
       Alert.alert('Missing name', 'Please enter a name for the child.');
       return;
     }
-    setSubmitting(true);
-    try {
-      await addKid(trimmedName, ageGroup);
-      setName('');
-      setAgeGroup('8-10');
-      setShowForm(false);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        (err instanceof Error ? err.message : 'Failed to create profile');
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      Alert.alert(
-        'Error',
-        status === 404
-          ? 'Could not create profile. Please try again.'
-          : msg
-      );
-    } finally {
-      setSubmitting(false);
+    if (isNaN(parsedAge) || parsedAge < 1 || parsedAge > 18) {
+      Alert.alert('Invalid age', 'Please enter an age between 1 and 18.');
+      return;
     }
+    addKid(trimmedName, parsedAge);
+    closeForm();
   };
 
-  const handleRemoveKid = (childId: string, kidName: string) => {
+  const handleRemoveKid = (kidId: string, kidName: string) => {
     Alert.alert(
       'Remove Profile',
       `Are you sure you want to remove ${kidName}'s profile?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await removeKid(childId);
-            } catch (err) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to remove profile');
-            }
-          },
-        },
+        { text: 'Remove', style: 'destructive', onPress: () => removeKid(kidId) },
       ],
     );
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/(auth)/login');
-  };
-
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Image source={BlipHead} style={styles.headerIcon} resizeMode="contain" />
-          <Text style={styles.headerTitle}>Profile</Text>
-        </View>
+    <>
+      <KidProfileModal
+        kid={selectedKid ? kids.find((k) => k.id === selectedKid.id) ?? selectedKid : null}
+        visible={!!selectedKid}
+        onClose={() => setSelectedKid(null)}
+        onUpdateInterval={handleUpdateInterval}
+        onUpdateTopics={handleUpdateTopics}
+      />
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-
-        {/* Existing Profiles */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Kid Profiles</Text>
-          {loading ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>Loading...</Text>
-            </View>
-          ) : (
-            <>
-          {kids.map((kid) => (
-            <View key={kid.childId} style={styles.kidRow}>
-              <View style={[styles.kidAvatar, { backgroundColor: kid.avatarColor }]}>
-                <Text style={styles.kidAvatarEmoji}>{kid.avatarEmoji}</Text>
-              </View>
-              <View style={styles.kidInfo}>
-                <Text style={styles.kidName}>{kid.name}</Text>
-                <Text style={styles.kidMeta}>
-                  Ages {kid.ageGroup} · {kid.intervalMinutes} min interval · {kid.learningFocus.length} topics
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => handleRemoveKid(kid.childId, kid.name)}
-                style={styles.removeBtn}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.removeBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          {kids.length === 0 && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No profiles yet. Add a kid to get started.</Text>
-            </View>
-          )}
-            </>
-          )}
-        </View>
-
-        {/* Add Kid */}
-        {!showForm ? (
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => setShowForm(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.addBtnText}>+ Add Kid</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.formCard}>
+      <Modal visible={showForm} transparent animationType="fade" onRequestClose={closeForm}>
+        <Pressable style={styles.backdrop} onPress={closeForm}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.formTitle}>New Profile</Text>
 
             <TextInput
@@ -166,30 +96,20 @@ export default function ProfileScreen() {
               autoFocus
             />
 
-            <Text style={styles.label}>Age group</Text>
-            <View style={styles.ageGroupRow}>
-              {AGE_GROUPS.map((ag) => (
-                <TouchableOpacity
-                  key={ag}
-                  style={[styles.ageGroupBtn, ageGroup === ag && styles.ageGroupBtnActive]}
-                  onPress={() => setAgeGroup(ag)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.ageGroupBtnText, ageGroup === ag && styles.ageGroupBtnTextActive]}>
-                    {ag}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="Age (1–18)"
+              placeholderTextColor="#A0A0A0"
+              value={age}
+              onChangeText={setAge}
+              keyboardType="number-pad"
+              maxLength={2}
+            />
 
             <View style={styles.formActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
-                onPress={() => {
-                  setShowForm(false);
-                  setName('');
-                  setAgeGroup('8-10');
-                }}
+                onPress={closeForm}
                 activeOpacity={0.7}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -199,24 +119,80 @@ export default function ProfileScreen() {
                 style={styles.saveBtn}
                 onPress={handleAddKid}
                 activeOpacity={0.8}
-                disabled={submitting}
               >
-                <Text style={styles.saveBtnText}>{submitting ? 'Creating...' : 'Create Profile'}</Text>
+                <Text style={styles.saveBtnText}>Create Profile</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
-        {/* Sign Out */}
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Image source={BlipHead} style={styles.headerIcon} resizeMode="contain" />
+          <Text style={styles.headerTitle}>Settings</Text>
+        </View>
+
+        {/* Existing Profiles */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Kid Profiles</Text>
+          {kids.map((kid) => (
+            <TouchableOpacity
+              key={kid.id}
+              style={[styles.kidRow, !kid.active && styles.kidRowInactive]}
+              activeOpacity={0.7}
+              onPress={() => setSelectedKid(kid)}
+            >
+              <View style={[styles.kidAvatar, { backgroundColor: kid.avatarColor }]}>
+                <Text style={styles.kidAvatarEmoji}>{kid.avatarEmoji}</Text>
+              </View>
+              <View style={styles.kidInfo}>
+                <Text style={styles.kidName}>{kid.name}</Text>
+                <Text style={styles.kidMeta}>
+                  Age {kid.age} · {kid.intervalMinutes} min · {kid.active ? 'Active' : 'Paused'}
+                </Text>
+              </View>
+              <Switch
+                value={kid.active}
+                onValueChange={() => toggleKidActive(kid.id)}
+                trackColor={{ false: '#E0E0E0', true: '#A8D800' }}
+                thumbColor={WHITE}
+                style={styles.toggle}
+              />
+              <TouchableOpacity
+                onPress={() => handleRemoveKid(kid.id, kid.name)}
+                style={styles.removeBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.removeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))}
+
+          {kids.length === 0 && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No profiles yet. Add a kid to get started.</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Add Kid */}
         <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={handleLogout}
-          activeOpacity={0.7}
+          style={styles.addBtn}
+          onPress={() => setShowForm(true)}
+          activeOpacity={0.8}
         >
-          <Text style={styles.logoutText}>Sign Out</Text>
+          <Text style={styles.addBtnText}>+ Add Kid</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
+    </>
   );
 }
 
@@ -273,6 +249,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
+  },
+  kidRowInactive: {
+    opacity: 0.5,
+  },
+  toggle: {
+    marginRight: 8,
   },
   kidAvatar: {
     width: 48,
@@ -341,66 +323,29 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  formCard: {
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
     backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 28,
+    padding: 24,
+    width: '100%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 12,
   },
   formTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: DARK,
     marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: DARK_OLIVE,
-    marginBottom: 8,
-  },
-  ageGroupRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-  },
-  ageGroupBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    backgroundColor: WHITE,
-  },
-  ageGroupBtnActive: {
-    borderColor: DARK_OLIVE,
-    backgroundColor: DARK_OLIVE,
-  },
-  ageGroupBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: DARK,
-  },
-  ageGroupBtnTextActive: {
-    color: YELLOW,
-  },
-  errorBox: {
-    backgroundColor: '#FFF0F0',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#C62828',
-    fontWeight: '600',
   },
   input: {
     backgroundColor: '#F5F5F5',
@@ -439,16 +384,5 @@ const styles = StyleSheet.create({
     color: YELLOW,
     fontSize: 15,
     fontWeight: '700',
-  },
-
-  logoutBtn: {
-    alignItems: 'center',
-    paddingVertical: 14,
-    marginTop: 24,
-  },
-  logoutText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: ACCENT_RED,
   },
 });

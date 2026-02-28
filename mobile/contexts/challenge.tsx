@@ -14,12 +14,11 @@ import {
   scheduleChallengeNotification,
   cancelChallengeNotification,
   addChallengeNotificationListener,
-  scheduleNagNotifications,
-  cancelNagNotifications,
+  sendImmediateNag,
+  cancelAllNagNotifications,
 } from '@/services/notifications';
 import { stopAlarmSound } from '@/services/alarm-sound';
 import { checkLaunchPayload } from '@/services/alarm-kit';
-import { useKids } from '@/contexts/kids';
 
 const STORAGE_KEYS = {
   INTERVAL_MINUTES: 'challenge_interval_minutes',
@@ -36,21 +35,24 @@ interface ChallengeContextType {
   setIntervalMinutes: (minutes: number) => Promise<void>;
   triggerChallenge: () => void;
   dismissChallenge: () => void;
+  scheduleTestChallenge: (seconds: number) => Promise<void>;
+  pauseNags: () => void;
   minutesUntilNext: number | null;
-  /** Child ID for the active profile (used when triggering session API). */
-  activeChildId: string | null;
+  secondsUntilNext: number | null;
 }
 
 const ChallengeContext = createContext<ChallengeContextType | null>(null);
 
 export function ChallengeProvider({ children }: { children: React.ReactNode }) {
-  const { activeChildId } = useKids();
   const [isChallengeActive, setIsChallengeActive] = useState(false);
   const [nextChallengeAt, setNextChallengeAt] = useState<number | null>(null);
   const [intervalMinutes, setIntervalMinutesState] = useState(DEFAULT_INTERVAL_MINUTES);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const nagRescheduleRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const appStateRef = useRef(AppState.currentState);
+  const nagsPausedRef = useRef(false);
+
+  const pauseNags = useCallback(() => {
+    nagsPausedRef.current = true;
+  }, []);
 
   const activateChallenge = useCallback(() => {
     setIsChallengeActive(true);
@@ -65,9 +67,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
 
       if (timerRef.current) clearTimeout(timerRef.current);
       const delay = Math.max(0, nextAt - Date.now());
-      timerRef.current = setTimeout(() => {
-        activateChallenge();
-      }, delay);
+      timerRef.current = setTimeout(() => activateChallenge(), delay);
 
       await scheduleChallengeNotification(nextAt);
     },
@@ -98,23 +98,31 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
   const dismissChallenge = useCallback(async () => {
     setIsChallengeActive(false);
     await AsyncStorage.setItem(STORAGE_KEYS.IS_ACTIVE, 'false');
-    if (nagRescheduleRef.current) {
-      clearInterval(nagRescheduleRef.current);
-      nagRescheduleRef.current = null;
-    }
     await stopAlarmSound();
-    await cancelNagNotifications();
-    await cancelChallengeNotification();
+    await cancelAllNagNotifications();
     const nextAt = Date.now() + intervalMinutes * 60 * 1000;
     await persistAndSchedule(nextAt);
   }, [intervalMinutes, persistAndSchedule]);
+
+  const scheduleTestChallenge = useCallback(
+    async (seconds: number) => {
+      const nextAt = Date.now() + seconds * 1000;
+      await persistAndSchedule(nextAt);
+    },
+    [persistAndSchedule]
+  );
 
   const minutesUntilNext =
     nextChallengeAt && !isChallengeActive
       ? Math.max(0, Math.ceil((nextChallengeAt - Date.now()) / 60000))
       : null;
 
-  // Check for missed challenges when returning from background
+  const secondsUntilNext =
+    nextChallengeAt && !isChallengeActive
+      ? Math.max(0, Math.ceil((nextChallengeAt - Date.now()) / 1000))
+      : null;
+
+  // Catch missed challenges when app returns to foreground
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState !== 'active') return;
@@ -134,6 +142,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, [isChallengeActive, nextChallengeAt, activateChallenge]);
 
+  // Restore persisted state on mount
   useEffect(() => {
     let mounted = true;
 
@@ -187,6 +196,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     };
   }, [persistAndSchedule, activateChallenge]);
 
+  // Activate challenge when notification fires / is tapped
   useEffect(() => {
     const remove = addChallengeNotificationListener(() => {
       activateChallenge();
@@ -194,25 +204,22 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     return remove;
   }, [activateChallenge]);
 
-  // When challenge is active, cancel the original alarm and start nagging
-  // via repeated critical notifications every 30 seconds.
+  // CORE: when challenge is active, send a notification every 5 seconds.
+  // The overlay calls pauseNags() once the quiz is visible so the user
+  // can solve in peace. The loop keeps running but skips the send.
   useEffect(() => {
     if (!isChallengeActive) return;
 
+    nagsPausedRef.current = false;
     cancelChallengeNotification();
-    cancelNagNotifications().then(() => scheduleNagNotifications());
-
-    const RESCHEDULE_MS = 25 * 60 * 1000;
-    nagRescheduleRef.current = setInterval(() => {
-      cancelNagNotifications().then(() => scheduleNagNotifications());
-    }, RESCHEDULE_MS);
+    if (AppState.currentState !== 'active') sendImmediateNag();
+    const id = setInterval(() => {
+      if (!nagsPausedRef.current && AppState.currentState !== 'active') sendImmediateNag();
+    }, 5000);
 
     return () => {
-      if (nagRescheduleRef.current) {
-        clearInterval(nagRescheduleRef.current);
-        nagRescheduleRef.current = null;
-      }
-      cancelNagNotifications();
+      clearInterval(id);
+      cancelAllNagNotifications();
     };
   }, [isChallengeActive]);
 
@@ -225,8 +232,10 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         setIntervalMinutes,
         triggerChallenge,
         dismissChallenge,
+        scheduleTestChallenge,
+        pauseNags,
         minutesUntilNext,
-        activeChildId,
+        secondsUntilNext,
       }}
     >
       {children}
