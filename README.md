@@ -35,19 +35,10 @@ Almas Bekbolat | UI Designer, Developer
 
 ### Backend
 
-1. Install dependencies:
+1. Build and start with Docker Compose:
    ```bash
-   cd backend
-   npm install
-   ```
-2. Create a `.env` file (see `.env.example` or set at minimum):
-   ```
-   AWS_REGION=us-east-1
-   JWT_SECRET=your-secret-here
-   ```
-3. Start the dev server:
-   ```bash
-   npm run dev
+   docker compose build --no-cache backend
+   docker compose up
    ```
    The server runs on `http://localhost:3000`. Check health at `GET /health`.
 
