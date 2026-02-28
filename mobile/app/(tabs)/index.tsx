@@ -136,13 +136,13 @@ export default function HomeScreen() {
           ))}
 
           {/* Test Challenge Button */}
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.testBtn}
             onPress={triggerChallenge}
             activeOpacity={0.8}
           >
             <Text style={styles.testBtnText}>Test Challenge Now</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Child Mode Button */}
           <TouchableOpacity
