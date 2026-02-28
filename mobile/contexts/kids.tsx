@@ -15,6 +15,7 @@ interface KidsContextType {
   addKid: (name: string, age: number) => KidProfile;
   updateKidInterval: (kidId: string, minutes: number) => void;
   updateKidTopics: (kidId: string, topics: string[]) => void;
+  toggleKidActive: (kidId: string) => void;
   removeKid: (kidId: string) => void;
 }
 
@@ -36,6 +37,7 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
       peakInterests: [],
       currentTopicSet: [],
       intervalMinutes: 30,
+      active: false,
     };
     setKids((prev) => [...prev, newKid]);
     return newKid;
@@ -53,13 +55,19 @@ export function KidsProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  const toggleKidActive = useCallback((kidId: string) => {
+    setKids((prev) =>
+      prev.map((k) => (k.id === kidId ? { ...k, active: !k.active } : k)),
+    );
+  }, []);
+
   const removeKid = useCallback((kidId: string) => {
     setKids((prev) => prev.filter((k) => k.id !== kidId));
   }, []);
 
   return (
     <KidsContext.Provider
-      value={{ kids, addKid, updateKidInterval, updateKidTopics, removeKid }}
+      value={{ kids, addKid, updateKidInterval, updateKidTopics, toggleKidActive, removeKid }}
     >
       {children}
     </KidsContext.Provider>

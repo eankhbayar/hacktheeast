@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -11,9 +11,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { AlarmPermissionModal } from '@/components/alarm-permission-modal';
-import { KidProfileCard } from '@/components/kid-profile-card';
-import { KidProfileModal } from '@/components/kid-profile-modal';
-import type { KidProfile } from '@/data/kids';
 import { useKids } from '@/contexts/kids';
 import { useAuth } from '@/hooks/use-auth';
 import { useChallenge } from '@/hooks/use-challenge';
@@ -29,7 +26,7 @@ const ACCENT_RED = '#D32F2F';
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
-  const { kids, updateKidInterval, updateKidTopics } = useKids();
+  const { kids } = useKids();
   const {
     minutesUntilNext,
     setIntervalMinutes,
@@ -37,23 +34,13 @@ export default function HomeScreen() {
   } = useChallenge();
   const [, setTick] = useState(0);
   const [showAlarmPermission, setShowAlarmPermission] = useState(false);
-  const [selectedKid, setSelectedKid] = useState<KidProfile | null>(null);
-  const [activeKidId, setActiveKidId] = useState<string>(kids[0]?.id ?? '');
 
-  const activeKid = kids.find((k) => k.id === activeKidId) ?? kids[0];
+  const activeKids = useMemo(() => kids.filter((k) => k.active), [kids]);
+  const firstActiveInterval = activeKids[0]?.intervalMinutes;
 
   useEffect(() => {
-    if (activeKid) setIntervalMinutes(activeKid.intervalMinutes);
-  }, [activeKid, setIntervalMinutes]);
-
-  const handleUpdateInterval = (kidId: string, minutes: number) => {
-    updateKidInterval(kidId, minutes);
-    if (activeKidId === kidId) setIntervalMinutes(minutes);
-  };
-
-  const handleUpdateTopics = (kidId: string, topics: string[]) => {
-    updateKidTopics(kidId, topics);
-  };
+    if (firstActiveInterval != null) setIntervalMinutes(firstActiveInterval);
+  }, [firstActiveInterval, setIntervalMinutes]);
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60000);
@@ -87,13 +74,6 @@ export default function HomeScreen() {
         visible={showAlarmPermission}
         onDismiss={handleAlarmPermissionDismiss}
       />
-      <KidProfileModal
-        kid={selectedKid ? kids.find((k) => k.id === selectedKid.id) ?? selectedKid : null}
-        visible={!!selectedKid}
-        onClose={() => setSelectedKid(null)}
-        onUpdateInterval={handleUpdateInterval}
-        onUpdateTopics={handleUpdateTopics}
-      />
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <ScrollView
           style={styles.scrollView}
@@ -113,21 +93,37 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Mascot + Timer Card */}
-          <View style={styles.timerCard}>
+          {/* Mascot */}
+          <View style={styles.mascotWrapper}>
             <Image source={BlipRobot} style={styles.mascotImage} resizeMode="contain" />
-            <Text style={styles.activeKidName}>{activeKid.name}</Text>
-            <Text style={styles.timerLabel}>Next Challenge In</Text>
-            <Text style={styles.timerValue}>
-              {minutesUntilNext !== null ? `${minutesUntilNext} min` : '—'}
-            </Text>
-            <View style={styles.timerDivider} />
-            <View style={styles.intervalBadge}>
-              <Text style={styles.intervalBadgeText}>
-                Every {activeKid.intervalMinutes} min
-              </Text>
-            </View>
           </View>
+
+          {/* Active Kids */}
+          {activeKids.length === 0 && (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No active kids. Enable kids in the Kids tab.</Text>
+            </View>
+          )}
+
+          {activeKids.map((kid) => (
+            <View key={kid.id} style={styles.timerCard}>
+              <View style={[styles.kidDot, { backgroundColor: kid.avatarColor }]}>
+                <Text style={styles.kidDotEmoji}>{kid.avatarEmoji}</Text>
+              </View>
+              <View style={styles.timerContent}>
+                <Text style={styles.activeKidName}>{kid.name}</Text>
+                <Text style={styles.timerLabel}>Next Challenge In</Text>
+                <Text style={styles.timerValue}>
+                  {minutesUntilNext !== null ? `${minutesUntilNext} min` : '—'}
+                </Text>
+              </View>
+              <View style={styles.intervalBadge}>
+                <Text style={styles.intervalBadgeText}>
+                  Every {kid.intervalMinutes} min
+                </Text>
+              </View>
+            </View>
+          ))}
 
           {/* Test Challenge Button */}
           <TouchableOpacity
@@ -137,24 +133,6 @@ export default function HomeScreen() {
           >
             <Text style={styles.testBtnText}>Test Challenge Now</Text>
           </TouchableOpacity>
-
-          {/* Kid Profiles */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Kids</Text>
-            <View style={styles.profileGrid}>
-              {kids.map((kid) => (
-                <KidProfileCard
-                  key={kid.id}
-                  kid={kid}
-                  isActive={kid.id === activeKidId}
-                  onPress={(k) => {
-                    setActiveKidId(k.id);
-                    setSelectedKid(k);
-                  }}
-                />
-              ))}
-            </View>
-          </View>
 
           {/* Sign Out */}
           <TouchableOpacity
@@ -217,79 +195,86 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  // Mascot
+  mascotWrapper: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  mascotImage: {
+    width: 180,
+    height: 180,
+  },
+
+  // Empty state
+  emptyCard: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+  },
+
   // Timer Card
   timerCard: {
     backgroundColor: WHITE,
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 20,
+    padding: 18,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  mascotImage: {
-    width: 200,
-    height: 200,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  kidDot: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  kidDotEmoji: {
+    fontSize: 26,
+  },
+  timerContent: {
+    flex: 1,
   },
   activeKidName: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '800',
     color: DARK,
-    marginBottom: 4,
   },
   timerLabel: {
-    fontSize: 14,
+    fontSize: 11,
     color: DARK_OLIVE,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 4,
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
   timerValue: {
-    fontSize: 40,
+    fontSize: 26,
     fontWeight: '800',
     color: DARK,
   },
-  timerDivider: {
-    width: 40,
-    height: 3,
-    backgroundColor: YELLOW,
-    borderRadius: 2,
-    marginVertical: 12,
-  },
   intervalBadge: {
     backgroundColor: '#F5F5F5',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
   },
   intervalBadgeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: DARK_OLIVE,
-  },
-
-  // Sections
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: DARK,
-    marginBottom: 12,
-  },
-
-  // Profile Grid
-  profileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 14,
   },
 
   // Test Button

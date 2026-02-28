@@ -7,11 +7,16 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Image,
+  Modal,
+  Pressable,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useKids } from '@/contexts/kids';
+import { KidProfileModal } from '@/components/kid-profile-modal';
+import type { KidProfile } from '@/data/kids';
 import { BlipHead } from '@/images';
-import { Image } from 'react-native';
 
 const YELLOW = '#FFD600';
 const DARK = '#2E2E00';
@@ -20,10 +25,25 @@ const WHITE = '#FFFFFF';
 const ACCENT_RED = '#D32F2F';
 
 export default function SettingsScreen() {
-  const { kids, addKid, removeKid } = useKids();
+  const { kids, addKid, removeKid, updateKidInterval, updateKidTopics, toggleKidActive } = useKids();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
+  const [selectedKid, setSelectedKid] = useState<KidProfile | null>(null);
+
+  const handleUpdateInterval = (kidId: string, minutes: number) => {
+    updateKidInterval(kidId, minutes);
+  };
+
+  const handleUpdateTopics = (kidId: string, topics: string[]) => {
+    updateKidTopics(kidId, topics);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setName('');
+    setAge('');
+  };
 
   const handleAddKid = () => {
     const trimmedName = name.trim();
@@ -37,9 +57,7 @@ export default function SettingsScreen() {
       return;
     }
     addKid(trimmedName, parsedAge);
-    setName('');
-    setAge('');
-    setShowForm(false);
+    closeForm();
   };
 
   const handleRemoveKid = (kidId: string, kidName: string) => {
@@ -54,60 +72,18 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Image source={BlipHead} style={styles.headerIcon} resizeMode="contain" />
-          <Text style={styles.headerTitle}>Settings</Text>
-        </View>
+    <>
+      <KidProfileModal
+        kid={selectedKid ? kids.find((k) => k.id === selectedKid.id) ?? selectedKid : null}
+        visible={!!selectedKid}
+        onClose={() => setSelectedKid(null)}
+        onUpdateInterval={handleUpdateInterval}
+        onUpdateTopics={handleUpdateTopics}
+      />
 
-        {/* Existing Profiles */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Kid Profiles</Text>
-          {kids.map((kid) => (
-            <View key={kid.id} style={styles.kidRow}>
-              <View style={[styles.kidAvatar, { backgroundColor: kid.avatarColor }]}>
-                <Text style={styles.kidAvatarEmoji}>{kid.avatarEmoji}</Text>
-              </View>
-              <View style={styles.kidInfo}>
-                <Text style={styles.kidName}>{kid.name}</Text>
-                <Text style={styles.kidMeta}>
-                  Age {kid.age} · {kid.intervalMinutes} min interval · {kid.currentTopicSet.length} topics
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => handleRemoveKid(kid.id, kid.name)}
-                style={styles.removeBtn}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.removeBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          {kids.length === 0 && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No profiles yet. Add a kid to get started.</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Add Kid */}
-        {!showForm ? (
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => setShowForm(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.addBtnText}>+ Add Kid</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.formCard}>
+      <Modal visible={showForm} transparent animationType="fade" onRequestClose={closeForm}>
+        <Pressable style={styles.backdrop} onPress={closeForm}>
+          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.formTitle}>New Profile</Text>
 
             <TextInput
@@ -133,11 +109,7 @@ export default function SettingsScreen() {
             <View style={styles.formActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
-                onPress={() => {
-                  setShowForm(false);
-                  setName('');
-                  setAge('');
-                }}
+                onPress={closeForm}
                 activeOpacity={0.7}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
@@ -151,10 +123,76 @@ export default function SettingsScreen() {
                 <Text style={styles.saveBtnText}>Create Profile</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Image source={BlipHead} style={styles.headerIcon} resizeMode="contain" />
+          <Text style={styles.headerTitle}>Settings</Text>
+        </View>
+
+        {/* Existing Profiles */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Kid Profiles</Text>
+          {kids.map((kid) => (
+            <TouchableOpacity
+              key={kid.id}
+              style={[styles.kidRow, !kid.active && styles.kidRowInactive]}
+              activeOpacity={0.7}
+              onPress={() => setSelectedKid(kid)}
+            >
+              <View style={[styles.kidAvatar, { backgroundColor: kid.avatarColor }]}>
+                <Text style={styles.kidAvatarEmoji}>{kid.avatarEmoji}</Text>
+              </View>
+              <View style={styles.kidInfo}>
+                <Text style={styles.kidName}>{kid.name}</Text>
+                <Text style={styles.kidMeta}>
+                  Age {kid.age} · {kid.intervalMinutes} min · {kid.active ? 'Active' : 'Paused'}
+                </Text>
+              </View>
+              <Switch
+                value={kid.active}
+                onValueChange={() => toggleKidActive(kid.id)}
+                trackColor={{ false: '#E0E0E0', true: '#A8D800' }}
+                thumbColor={WHITE}
+                style={styles.toggle}
+              />
+              <TouchableOpacity
+                onPress={() => handleRemoveKid(kid.id, kid.name)}
+                style={styles.removeBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.removeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))}
+
+          {kids.length === 0 && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>No profiles yet. Add a kid to get started.</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Add Kid */}
+        <TouchableOpacity
+          style={styles.addBtn}
+          onPress={() => setShowForm(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.addBtnText}>+ Add Kid</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
+    </>
   );
 }
 
@@ -211,6 +249,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
+  },
+  kidRowInactive: {
+    opacity: 0.5,
+  },
+  toggle: {
+    marginRight: 8,
   },
   kidAvatar: {
     width: 48,
@@ -279,15 +323,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  formCard: {
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
     backgroundColor: WHITE,
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 28,
+    padding: 24,
+    width: '100%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 12,
   },
   formTitle: {
     fontSize: 18,

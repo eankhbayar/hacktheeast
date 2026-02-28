@@ -8,6 +8,7 @@ export interface KidProfile {
   peakInterests: string[];
   currentTopicSet: string[];
   intervalMinutes: number;
+  active: boolean;
 }
 
 export const KIDS: KidProfile[] = [
@@ -21,6 +22,7 @@ export const KIDS: KidProfile[] = [
     peakInterests: ['Math', 'Science', 'Art'],
     currentTopicSet: ['Quadratic Equations', 'Fractions', 'Reading Comprehension'],
     intervalMinutes: 30,
+    active: true,
   },
   {
     id: 'kid-2',
@@ -32,6 +34,7 @@ export const KIDS: KidProfile[] = [
     peakInterests: ['History', 'Geography', 'Sports'],
     currentTopicSet: ['Grammar Basics', 'World Capitals', 'Ancient Civilizations'],
     intervalMinutes: 15,
+    active: true,
   },
   {
     id: 'kid-3',
@@ -43,5 +46,6 @@ export const KIDS: KidProfile[] = [
     peakInterests: ['Animals', 'Colors', 'Music'],
     currentTopicSet: ['Counting Numbers', 'Animal Names', 'Basic Shapes'],
     intervalMinutes: 45,
+    active: false,
   },
 ];
