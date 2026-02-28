@@ -98,7 +98,7 @@ export default function SettingsScreen() {
 
             <TextInput
               style={styles.input}
-              placeholder="Age (1–18)"
+              placeholder="Age (2–12)"
               placeholderTextColor="#A0A0A0"
               value={age}
               onChangeText={setAge}

@@ -191,18 +191,21 @@ export function ChallengeOverlay() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (overrideAnswer?: string) => {
+    const submittedAnswer = overrideAnswer ?? answer;
+    if (transitioning && !overrideAnswer) return;
+    if (overrideAnswer) setTransitioning(true);
     // ── Child mode: 3-question flow ──
     if (isChildMode) {
-      if (transitioning) return;
       const currentQ = questions[currentIndex];
       if (!currentQ) return;
 
-      const normalized = answer.trim().toLowerCase();
+      const normalized = submittedAnswer.trim().toLowerCase();
       const expected = currentQ.answer.trim().toLowerCase();
 
       if (normalized === expected) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTransitioning(false);
         goToNextOrFinish(currentIndex, wrongAnswers);
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -218,6 +221,7 @@ export function ChallengeOverlay() {
           },
         ];
         setWrongAnswers(newWrong);
+        setTransitioning(true);
         setTimeout(() => {
           setTransitioning(false);
           goToNextOrFinish(currentIndex, newWrong);
@@ -228,17 +232,19 @@ export function ChallengeOverlay() {
 
     // ── Parent mode: single question, retry until correct ──
     if (!singleQuestion) return;
-    const normalized = answer.trim().toLowerCase();
+    const normalized = submittedAnswer.trim().toLowerCase();
     const expected = singleQuestion.answer.trim().toLowerCase();
 
     if (normalized === expected) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTransitioning(false);
       dismissChallenge();
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       shake();
       flashRed();
       setError('Wrong answer. Try again!');
+      setTransitioning(false);
     }
   };
 
@@ -372,23 +378,54 @@ export function ChallengeOverlay() {
           </View>
         )}
 
-        <Animated.View style={[styles.inputWrap, animatedStyle]}>
-          <TextInput
-            style={styles.input}
-            placeholder="Type your answer..."
-            placeholderTextColor="#A0A0A0"
-            value={answer}
-            onChangeText={(t) => {
-              setAnswer(t);
-              setError('');
-            }}
-            onSubmitEditing={handleSubmit}
-            returnKeyType="done"
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!transitioning}
-          />
-        </Animated.View>
+        {displayQuestion?.options && displayQuestion.options.length > 0 ? (
+          <Animated.View style={[styles.optionsWrap, animatedStyle]}>
+            {displayQuestion.options.map((opt) => (
+              <TouchableOpacity
+                key={opt}
+                style={[
+                  styles.optionButton,
+                  answer === opt && styles.optionButtonSelected,
+                  transitioning && styles.optionButtonDisabled,
+                ]}
+                onPress={() => {
+                  setAnswer(opt);
+                  setError('');
+                  handleSubmit(opt);
+                }}
+                activeOpacity={0.8}
+                disabled={transitioning}
+              >
+                <Text
+                  style={[
+                    styles.optionButtonText,
+                    answer === opt && styles.optionButtonTextSelected,
+                  ]}
+                >
+                  {opt}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </Animated.View>
+        ) : (
+          <Animated.View style={[styles.inputWrap, animatedStyle]}>
+            <TextInput
+              style={styles.input}
+              placeholder="Type your answer..."
+              placeholderTextColor="#A0A0A0"
+              value={answer}
+              onChangeText={(t) => {
+                setAnswer(t);
+                setError('');
+              }}
+              onSubmitEditing={() => handleSubmit()}
+              returnKeyType="done"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!transitioning}
+            />
+          </Animated.View>
+        )}
 
         {error ? (
           <View style={styles.errorBox}>
@@ -396,14 +433,16 @@ export function ChallengeOverlay() {
           </View>
         ) : null}
 
-        <TouchableOpacity
-          style={[styles.button, transitioning && styles.buttonDisabled]}
-          onPress={handleSubmit}
-          activeOpacity={0.8}
-          disabled={transitioning}
-        >
-          <Text style={styles.buttonText}>Submit</Text>
-        </TouchableOpacity>
+        {!displayQuestion?.options?.length && (
+          <TouchableOpacity
+            style={[styles.button, transitioning && styles.buttonDisabled]}
+            onPress={() => handleSubmit()}
+            activeOpacity={0.8}
+            disabled={transitioning}
+          >
+            <Text style={styles.buttonText}>Submit</Text>
+          </TouchableOpacity>
+        )}
       </KeyboardAvoidingView>
     </Animated.View>
   );
@@ -494,6 +533,40 @@ const styles = StyleSheet.create({
   inputWrap: {
     width: '100%',
     marginBottom: 14,
+  },
+  optionsWrap: {
+    width: '100%',
+    marginBottom: 14,
+  },
+  optionButton: {
+    marginBottom: 10,
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  optionButtonSelected: {
+    borderColor: DARK_OLIVE,
+    backgroundColor: '#FFFDE7',
+  },
+  optionButtonDisabled: {
+    opacity: 0.6,
+  },
+  optionButtonText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: DARK,
+    textAlign: 'center',
+  },
+  optionButtonTextSelected: {
+    color: DARK_OLIVE,
+    fontWeight: '700',
   },
   input: {
     backgroundColor: WHITE,

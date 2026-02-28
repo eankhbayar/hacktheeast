@@ -1,8 +1,13 @@
 export type QuestionDifficulty = 'easy' | 'medium' | 'hard';
 
+export type QuestionType = 'short_answer' | 'multiple_choice';
+
 export interface Question {
   question: string;
   answer: string;
+  /** When present, render as multiple choice instead of text input. */
+  options?: string[];
+  type?: QuestionType;
 }
 
 function randomInt(min: number, max: number): number {
@@ -57,15 +62,26 @@ export function generateMathQuestion(
   }
 }
 
+function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 const DEFAULT_CUSTOM_QUESTIONS: Question[] = [
-  { question: 'What is the capital of France?', answer: 'Paris' },
-  { question: 'How many days are in a week?', answer: '7' },
-  { question: 'What color is the sky on a clear day?', answer: 'Blue' },
-  { question: 'How many legs does a spider have?', answer: '8' },
-  { question: 'What is 2 + 2?', answer: '4' },
-  { question: 'What planet do we live on?', answer: 'Earth' },
-  { question: 'How many months are in a year?', answer: '12' },
-  { question: 'What is the opposite of hot?', answer: 'Cold' },
+  { question: 'What is the capital of France?', answer: 'Paris', options: ['London', 'Berlin', 'Paris', 'Madrid'] },
+  { question: 'How many days are in a week?', answer: '7', options: ['5', '6', '7', '8'] },
+  { question: 'What color is the sky on a clear day?', answer: 'Blue', options: ['Green', 'Blue', 'Red', 'Yellow'] },
+  { question: 'How many legs does a spider have?', answer: '8', options: ['6', '8', '10', '4'] },
+  { question: 'What is 2 + 2?', answer: '4', options: ['3', '4', '5', '6'] },
+  { question: 'What planet do we live on?', answer: 'Earth', options: ['Mars', 'Earth', 'Jupiter', 'Venus'] },
+  { question: 'How many months are in a year?', answer: '12', options: ['10', '11', '12', '13'] },
+  { question: 'What is the opposite of hot?', answer: 'Cold', options: ['Warm', 'Cold', 'Cool', 'Mild'] },
+  { question: 'What does "Bonjour" mean?', answer: 'Hello', options: ['Goodbye', 'Hello', 'Thank you', 'Please'] },
+  { question: 'How do you say "cat" in Spanish?', answer: 'Gato', options: ['Perro', 'Gato', 'Pájaro', 'Pez'] },
 ];
 
 let customQuestionIndex = 0;
@@ -73,14 +89,21 @@ let customQuestionIndex = 0;
 export function getCustomQuestion(): Question {
   const q = DEFAULT_CUSTOM_QUESTIONS[customQuestionIndex % DEFAULT_CUSTOM_QUESTIONS.length];
   customQuestionIndex++;
+  if (q.options) {
+    return { ...q, options: shuffle(q.options) };
+  }
   return q;
 }
 
 export async function fetchCustomQuestion(): Promise<Question | null> {
   try {
     const api = (await import('@/services/api')).default;
-    const res = await api.get<{ question: string; answer: string }>('/questions/custom');
-    return res.data;
+    const res = await api.get<{ question: string; answer: string; options?: string[] }>('/questions/custom');
+    const data = res.data;
+    if (data.options) {
+      return { ...data, options: shuffle(data.options) };
+    }
+    return data;
   } catch {
     return getCustomQuestion();
   }

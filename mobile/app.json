@@ -4,7 +4,7 @@
     "slug": "blip",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/2.png",
     "scheme": "blip",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -22,7 +22,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/images/2.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.ankhbayar.blip",
