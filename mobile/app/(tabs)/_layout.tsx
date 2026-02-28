@@ -3,12 +3,9 @@ import { Tabs, useRouter } from 'expo-router';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
@@ -21,7 +18,14 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: '#2E2E00',
+        tabBarInactiveTintColor: '#9E9E00',
+        tabBarStyle: {
+          backgroundColor: '#FFD600',
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
         headerShown: false,
         tabBarButton: HapticTab,
       }}>
@@ -33,10 +37,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="settings"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Settings',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
         }}
       />
     </Tabs>

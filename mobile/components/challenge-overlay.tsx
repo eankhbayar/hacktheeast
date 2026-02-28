@@ -9,6 +9,8 @@ import {
   KeyboardAvoidingView,
   Vibration,
   StatusBar,
+  Text,
+  Image,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -18,13 +20,18 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { ThemedText } from '@/components/themed-text';
 import { useChallenge } from '@/hooks/use-challenge';
 import { useAuth } from '@/hooks/use-auth';
 import { getRandomQuestion } from '@/lib/questions';
+import { BlipHead } from '@/images';
 
 const ALARM_VIBRATION_PATTERN = [0, 800, 400, 800, 400, 800, 400, 800];
 const HAPTIC_INTERVAL_MS = 1200;
+
+const YELLOW = '#FFD600';
+const DARK = '#2E2E00';
+const DARK_OLIVE = '#3D3B00';
+const WHITE = '#FFFFFF';
 
 export function ChallengeOverlay() {
   const { isChallengeActive, dismissChallenge } = useChallenge();
@@ -57,7 +64,6 @@ export function ChallengeOverlay() {
     }
   }, [isChallengeActive, user]);
 
-  // Block hardware back button (Android)
   useEffect(() => {
     if (!isChallengeActive || !user) return;
 
@@ -67,7 +73,6 @@ export function ChallengeOverlay() {
     return () => sub.remove();
   }, [isChallengeActive, user]);
 
-  // Continuous haptic feedback loop
   useEffect(() => {
     if (!isChallengeActive || !user) return;
 
@@ -122,17 +127,27 @@ export function ChallengeOverlay() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.inner}
       >
-        <ThemedText type="title" style={styles.title}>
-          Answer to continue
-        </ThemedText>
+        {/* Mascot */}
+        <Image source={BlipHead} style={styles.mascot} resizeMode="contain" />
+
+        {/* Title */}
+        <Text style={styles.title}>Answer to continue</Text>
+        <Text style={styles.subtitle}>Solve this to unlock your screen</Text>
+
+        {/* Question Card */}
         {question && (
-          <ThemedText style={styles.question}>{question.question}</ThemedText>
+          <View style={styles.questionCard}>
+            <Text style={styles.questionLabel}>QUESTION</Text>
+            <Text style={styles.questionText}>{question.question}</Text>
+          </View>
         )}
+
+        {/* Answer Input */}
         <Animated.View style={[styles.inputWrap, animatedStyle]}>
           <TextInput
             style={styles.input}
-            placeholder="Your answer"
-            placeholderTextColor="#9ca3af"
+            placeholder="Type your answer..."
+            placeholderTextColor="#A0A0A0"
             value={answer}
             onChangeText={(t) => {
               setAnswer(t);
@@ -144,15 +159,21 @@ export function ChallengeOverlay() {
             autoCorrect={false}
           />
         </Animated.View>
+
+        {/* Error */}
         {error ? (
-          <ThemedText style={[styles.error, { color: '#dc2626' }]}>
-            {error}
-          </ThemedText>
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
         ) : null}
-        <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-          <ThemedText lightColor="#fff" darkColor="#fff" style={styles.buttonText}>
-            Submit
-          </ThemedText>
+
+        {/* Submit */}
+        <TouchableOpacity
+          style={styles.button}
+          onPress={handleSubmit}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.buttonText}>Submit</Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>
     </View>
@@ -162,51 +183,113 @@ export function ChallengeOverlay() {
 const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0f172a',
+    backgroundColor: YELLOW,
     zIndex: 9999,
     justifyContent: 'center',
     alignItems: 'center',
   },
   inner: {
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 340,
     padding: 24,
-  },
-  title: {
-    color: '#f8fafc',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  question: {
-    color: '#e2e8f0',
-    fontSize: 24,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  inputWrap: {
-    marginBottom: 16,
-  },
-  input: {
-    backgroundColor: '#1e293b',
-    borderWidth: 2,
-    borderColor: '#334155',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 18,
-    color: '#f8fafc',
-  },
-  error: {
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: '#0ea5e9',
-    padding: 16,
-    borderRadius: 12,
     alignItems: 'center',
   },
-  buttonText: {
+
+  mascot: {
+    width: 160,
+    height: 160,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: DARK,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: DARK_OLIVE,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+
+  questionCard: {
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  questionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: DARK_OLIVE,
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  questionText: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: DARK,
+    textAlign: 'center',
+  },
+
+  inputWrap: {
+    width: '100%',
+    marginBottom: 14,
+  },
+  input: {
+    backgroundColor: WHITE,
+    borderRadius: 16,
+    padding: 16,
     fontSize: 18,
+    color: DARK,
+    textAlign: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+
+  errorBox: {
+    backgroundColor: '#FFF0F0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  errorText: {
+    color: '#C62828',
+    fontSize: 14,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+
+  button: {
+    backgroundColor: DARK_OLIVE,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonText: {
+    color: YELLOW,
+    fontSize: 18,
+    fontWeight: '700',
   },
 });

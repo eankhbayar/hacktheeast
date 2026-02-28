@@ -8,12 +8,18 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Text,
+  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, router } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { useAuth } from '@/hooks/use-auth';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { BlipRobot } from '@/images';
+
+const YELLOW = '#FFD600';
+const DARK = '#2E2E00';
+const DARK_OLIVE = '#3D3B00';
+const WHITE = '#FFFFFF';
 
 export default function RegisterScreen() {
   const { register } = useAuth();
@@ -24,9 +30,6 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const backgroundColor = useThemeColor({}, 'background');
-  const tintColor = useThemeColor({}, 'tint');
 
   const handleRegister = async () => {
     setError('');
@@ -85,7 +88,7 @@ export default function RegisterScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -95,102 +98,107 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <ThemedText type="title" style={styles.title}>
-            Create Account
-          </ThemedText>
+          {/* Branding */}
+          <View style={styles.brandingSection}>
+            <Text style={styles.welcomeText}>Join</Text>
+            <Text style={styles.brandName}>BLIP</Text>
+            <Image source={BlipRobot} style={styles.mascot} resizeMode="contain" />
+          </View>
 
-          {error ? (
-            <ThemedText style={[styles.error, { color: '#dc2626' }]}>
-              {error}
-            </ThemedText>
-          ) : null}
+          {/* Form */}
+          <View style={styles.formSection}>
+            {error ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
-          <TextInput
-            style={[styles.input, { backgroundColor }]}
-            placeholder="Full Name"
-            placeholderTextColor="#9ca3af"
-            value={fullName}
-            onChangeText={setFullName}
-            autoCapitalize="words"
-            editable={!isLoading}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Full Name"
+              placeholderTextColor="#A0A0A0"
+              value={fullName}
+              onChangeText={setFullName}
+              autoCapitalize="words"
+              editable={!isLoading}
+            />
 
-          <TextInput
-            style={[styles.input, { backgroundColor }]}
-            placeholder="Email"
-            placeholderTextColor="#9ca3af"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            editable={!isLoading}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#A0A0A0"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              editable={!isLoading}
+            />
 
-          <TextInput
-            style={[styles.input, { backgroundColor }]}
-            placeholder="Phone Number"
-            placeholderTextColor="#9ca3af"
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            keyboardType="phone-pad"
-            editable={!isLoading}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Phone Number"
+              placeholderTextColor="#A0A0A0"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              keyboardType="phone-pad"
+              editable={!isLoading}
+            />
 
-          <TextInput
-            style={[styles.input, { backgroundColor }]}
-            placeholder="Password (min 8 characters)"
-            placeholderTextColor="#9ca3af"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete="new-password"
-            editable={!isLoading}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Password (min 8 characters)"
+              placeholderTextColor="#A0A0A0"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="new-password"
+              editable={!isLoading}
+            />
 
-          <TextInput
-            style={[styles.input, { backgroundColor }]}
-            placeholder="Confirm Password"
-            placeholderTextColor="#9ca3af"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-            autoComplete="new-password"
-            editable={!isLoading}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm Password"
+              placeholderTextColor="#A0A0A0"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              autoComplete="new-password"
+              editable={!isLoading}
+            />
 
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: tintColor }]}
-            onPress={handleRegister}
-            disabled={isLoading}
-          >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <ThemedText lightColor="#fff" darkColor="#fff" style={styles.buttonText}>
-              Create Account
-            </ThemedText>
-          )}
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.button, isLoading && styles.buttonDisabled]}
+              onPress={handleRegister}
+              disabled={isLoading}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={YELLOW} />
+              ) : (
+                <Text style={styles.buttonText}>Create Account</Text>
+              )}
+            </TouchableOpacity>
 
-          <View style={styles.footer}>
-            <ThemedText>Already have an account? </ThemedText>
-            <Link href="/(auth)/login" asChild>
-              <TouchableOpacity>
-                <ThemedText type="link">Sign In</ThemedText>
-              </TouchableOpacity>
-            </Link>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Already have an account? </Text>
+              <Link href="/(auth)/login" asChild>
+                <TouchableOpacity>
+                  <Text style={styles.footerLink}>Sign In</Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </ThemedView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    padding: 24,
+    backgroundColor: YELLOW,
   },
   keyboardView: {
     flex: 1,
@@ -198,39 +206,95 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
+    paddingHorizontal: 28,
     paddingVertical: 24,
   },
-  title: {
-    marginBottom: 32,
+
+  brandingSection: {
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  welcomeText: {
+    fontSize: 18,
+    color: DARK_OLIVE,
+    fontWeight: '500',
+  },
+  brandName: {
+    fontSize: 48,
+    fontWeight: '900',
+    color: DARK,
+    letterSpacing: 2,
+    marginTop: 2,
+  },
+  mascot: {
+    width: 220,
+    height: 220,
+    marginTop: 12,
+  },
+
+  formSection: {
+    width: '100%',
+  },
+  errorBox: {
+    backgroundColor: '#FFF0F0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFCDD2',
+  },
+  errorText: {
+    color: '#C62828',
+    fontSize: 14,
     textAlign: 'center',
   },
-  error: {
-    marginBottom: 16,
-    fontSize: 14,
-  },
   input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
+    backgroundColor: WHITE,
+    borderRadius: 16,
     padding: 16,
     fontSize: 16,
-    marginBottom: 16,
+    marginBottom: 14,
+    color: DARK,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   button: {
-    padding: 16,
-    borderRadius: 8,
+    backgroundColor: DARK_OLIVE,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
     marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
+    color: YELLOW,
+    fontWeight: '700',
+    fontSize: 17,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 24,
     alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 15,
+    color: DARK_OLIVE,
+  },
+  footerLink: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: DARK,
+    textDecorationLine: 'underline',
   },
 });

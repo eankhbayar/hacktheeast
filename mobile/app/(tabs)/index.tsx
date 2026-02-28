@@ -2,33 +2,58 @@ import { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
-  Button,
   TouchableOpacity,
   ScrollView,
+  Text,
+  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
 import { AlarmPermissionModal } from '@/components/alarm-permission-modal';
+import { KidProfileCard } from '@/components/kid-profile-card';
+import { KidProfileModal } from '@/components/kid-profile-modal';
+import type { KidProfile } from '@/data/kids';
+import { useKids } from '@/contexts/kids';
 import { useAuth } from '@/hooks/use-auth';
 import { useChallenge } from '@/hooks/use-challenge';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { BlipRobot } from '@/images';
 
-const INTERVAL_OPTIONS = [15, 30, 45, 60];
 const STORAGE_KEY_ALARM_PERMISSION_ASKED = 'alarm_permission_asked';
+
+const YELLOW = '#FFD600';
+const DARK = '#2E2E00';
+const DARK_OLIVE = '#3D3B00';
+const WHITE = '#FFFFFF';
+const ACCENT_RED = '#D32F2F';
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
+  const { kids, updateKidInterval, updateKidTopics } = useKids();
   const {
     minutesUntilNext,
-    intervalMinutes,
     setIntervalMinutes,
     triggerChallenge,
   } = useChallenge();
-  const [content, setContent] = useState('');
   const [, setTick] = useState(0);
   const [showAlarmPermission, setShowAlarmPermission] = useState(false);
-  const tintColor = useThemeColor({}, 'tint');
+  const [selectedKid, setSelectedKid] = useState<KidProfile | null>(null);
+  const [activeKidId, setActiveKidId] = useState<string>(kids[0]?.id ?? '');
+
+  const activeKid = kids.find((k) => k.id === activeKidId) ?? kids[0];
+
+  useEffect(() => {
+    if (activeKid) setIntervalMinutes(activeKid.intervalMinutes);
+  }, [activeKid, setIntervalMinutes]);
+
+  const handleUpdateInterval = (kidId: string, minutes: number) => {
+    updateKidInterval(kidId, minutes);
+    if (activeKidId === kidId) setIntervalMinutes(minutes);
+  };
+
+  const handleUpdateTopics = (kidId: string, topics: string[]) => {
+    updateKidTopics(kidId, topics);
+  };
 
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 60000);
@@ -49,15 +74,12 @@ export default function HomeScreen() {
     AsyncStorage.setItem(STORAGE_KEY_ALARM_PERMISSION_ASKED, 'true');
   };
 
-  const handleGenerate = async () => {
-    // TODO: Call API
-    console.log('Generate content');
-  };
-
   const handleLogout = async () => {
     await logout();
     router.replace('/(auth)/login');
   };
+
+  const firstName = user?.fullName?.split(' ')[0] ?? '';
 
   return (
     <>
@@ -65,114 +87,239 @@ export default function HomeScreen() {
         visible={showAlarmPermission}
         onDismiss={handleAlarmPermissionDismiss}
       />
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
-      <ThemedText type="title" style={styles.title}>
-        Welcome{user ? `, ${user.fullName}` : ''}
-      </ThemedText>
-
-      <View style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>
-          Next challenge
-        </ThemedText>
-        <ThemedText style={styles.countdown}>
-          {minutesUntilNext !== null ? `${minutesUntilNext} min` : '—'}
-        </ThemedText>
-      </View>
-
-      <View style={styles.section}>
-        <ThemedText type="subtitle" style={styles.sectionTitle}>
-          Challenge interval
-        </ThemedText>
-        <View style={styles.intervalRow}>
-          {INTERVAL_OPTIONS.map((m) => (
-            <TouchableOpacity
-              key={m}
-              style={[
-                styles.intervalBtn,
-                intervalMinutes === m && { backgroundColor: tintColor },
-              ]}
-              onPress={() => setIntervalMinutes(m)}
-            >
-              <ThemedText
-                lightColor={intervalMinutes === m ? '#fff' : undefined}
-                darkColor={intervalMinutes === m ? '#fff' : undefined}
-              >
-                {m} min
-              </ThemedText>
+      <KidProfileModal
+        kid={selectedKid ? kids.find((k) => k.id === selectedKid.id) ?? selectedKid : null}
+        visible={!!selectedKid}
+        onClose={() => setSelectedKid(null)}
+        onUpdateInterval={handleUpdateInterval}
+        onUpdateTopics={handleUpdateTopics}
+      />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.greeting}>Welcome back,</Text>
+              <Text style={styles.userName}>{firstName || 'Parent'}</Text>
+            </View>
+            <TouchableOpacity style={styles.avatarCircle}>
+              <Text style={styles.avatarText}>
+                {firstName ? firstName[0].toUpperCase() : 'P'}
+              </Text>
             </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+          </View>
 
-      <TouchableOpacity
-        style={[styles.testBtn, { backgroundColor: '#dc2626' }]}
-        onPress={triggerChallenge}
-      >
-        <ThemedText lightColor="#fff" darkColor="#fff" style={styles.testBtnText}>
-          Test Challenge (check if escapable)
-        </ThemedText>
-      </TouchableOpacity>
+          {/* Mascot + Timer Card */}
+          <View style={styles.timerCard}>
+            <Image source={BlipRobot} style={styles.mascotImage} resizeMode="contain" />
+            <Text style={styles.activeKidName}>{activeKid.name}</Text>
+            <Text style={styles.timerLabel}>Next Challenge In</Text>
+            <Text style={styles.timerValue}>
+              {minutesUntilNext !== null ? `${minutesUntilNext} min` : '—'}
+            </Text>
+            <View style={styles.timerDivider} />
+            <View style={styles.intervalBadge}>
+              <Text style={styles.intervalBadgeText}>
+                Every {activeKid.intervalMinutes} min
+              </Text>
+            </View>
+          </View>
 
-      <Button title="Generate Content" onPress={handleGenerate} />
-      {content && <ThemedText style={styles.content}>{content}</ThemedText>}
-      <TouchableOpacity style={styles.logout} onPress={handleLogout}>
-        <ThemedText type="link">Sign Out</ThemedText>
-      </TouchableOpacity>
-    </ScrollView>
+          {/* Test Challenge Button */}
+          <TouchableOpacity
+            style={styles.testBtn}
+            onPress={triggerChallenge}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.testBtnText}>Test Challenge Now</Text>
+          </TouchableOpacity>
+
+          {/* Kid Profiles */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Kids</Text>
+            <View style={styles.profileGrid}>
+              {kids.map((kid) => (
+                <KidProfileCard
+                  key={kid.id}
+                  kid={kid}
+                  isActive={kid.id === activeKidId}
+                  onPress={(k) => {
+                    setActiveKidId(k.id);
+                    setSelectedKid(k);
+                  }}
+                />
+              ))}
+            </View>
+          </View>
+
+          {/* Sign Out */}
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.logoutText}>Sign Out</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: YELLOW,
+  },
+  scrollView: {
+    flex: 1,
+    backgroundColor: YELLOW,
+  },
   container: {
-    flexGrow: 1,
-    alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
-  title: {
-    marginBottom: 24,
-  },
-  section: {
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    marginBottom: 8,
-  },
-  countdown: {
-    fontSize: 20,
-  },
-  intervalRow: {
+
+  // Header
+  header: {
     flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingBottom: 20,
+  },
+  greeting: {
+    fontSize: 16,
+    color: DARK_OLIVE,
+    fontWeight: '500',
+  },
+  userName: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: DARK,
+    marginTop: 2,
+  },
+  avatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: DARK_OLIVE,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  intervalBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#64748b',
+  avatarText: {
+    color: YELLOW,
+    fontSize: 20,
+    fontWeight: '700',
   },
-  testBtn: {
-    padding: 16,
-    borderRadius: 12,
+
+  // Timer Card
+  timerCard: {
+    backgroundColor: WHITE,
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  mascotImage: {
+    width: 200,
+    height: 200,
+    marginBottom: 12,
+  },
+  activeKidName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: DARK,
+    marginBottom: 4,
+  },
+  timerLabel: {
+    fontSize: 14,
+    color: DARK_OLIVE,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  timerValue: {
+    fontSize: 40,
+    fontWeight: '800',
+    color: DARK,
+  },
+  timerDivider: {
+    width: 40,
+    height: 3,
+    backgroundColor: YELLOW,
+    borderRadius: 2,
+    marginVertical: 12,
+  },
+  intervalBadge: {
+    backgroundColor: '#F5F5F5',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  intervalBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: DARK_OLIVE,
+  },
+
+  // Sections
+  section: {
     marginBottom: 24,
   },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK,
+    marginBottom: 12,
+  },
+
+  // Profile Grid
+  profileGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 14,
+  },
+
+  // Test Button
+  testBtn: {
+    backgroundColor: DARK_OLIVE,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
   testBtnText: {
-    fontWeight: '600',
+    color: YELLOW,
     fontSize: 16,
+    fontWeight: '700',
   },
-  content: {
-    marginTop: 20,
-    textAlign: 'center',
+
+  // Logout
+  logoutBtn: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 8,
   },
-  logout: {
-    marginTop: 24,
+  logoutText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: ACCENT_RED,
   },
 });
