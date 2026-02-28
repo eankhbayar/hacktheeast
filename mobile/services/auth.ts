@@ -1,5 +1,10 @@
+import axios from 'axios';
+import Constants from 'expo-constants';
 import api from './api';
 import type { LoginRequest, RegisterRequest, AuthResponse, User } from '@/types/auth';
+
+const API_URL =
+  Constants.expoConfig?.extra?.apiUrl || 'http://localhost:3000';
 
 const AUTH_KEYS = {
   ACCESS_TOKEN: 'access_token',
@@ -25,11 +30,14 @@ export async function refreshToken(refreshTokenValue: string): Promise<{
   expiresIn: number;
   user: User;
 }> {
-  const response = await api.post<{
+  // Use a plain axios call to bypass the api interceptor.
+  // Otherwise a 401 here triggers the interceptor's refresh logic again,
+  // creating an infinite loop.
+  const response = await axios.post<{
     accessToken: string;
     expiresIn: number;
     user: User;
-  }>('/auth/refresh', { refreshToken: refreshTokenValue });
+  }>(`${API_URL}/auth/refresh`, { refreshToken: refreshTokenValue });
   return response.data;
 }
 
