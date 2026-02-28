@@ -20,7 +20,7 @@
       "package": "com.yourcompany.myapp"
     },
     "extra": {
-      "apiUrl": "http://localhost:3000"
+      "apiUrl": "http://10.89.73.138:3000"
     }
   }
 }

@@ -1,7 +1,11 @@
-import { StyleSheet, View, Text, Button } from 'react-native';
+import { StyleSheet, View, Text, Button, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
+import { router } from 'expo-router';
+import { ThemedText } from '@/components/themed-text';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function HomeScreen() {
+  const { user, logout } = useAuth();
   const [content, setContent] = useState('');
 
   const handleGenerate = async () => {
@@ -9,11 +13,21 @@ export default function HomeScreen() {
     console.log('Generate content');
   };
 
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/(auth)/login');
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome to My App</Text>
+      <ThemedText type="title" style={styles.title}>
+        Welcome{user ? `, ${user.fullName}` : ''}
+      </ThemedText>
       <Button title="Generate Content" onPress={handleGenerate} />
-      {content && <Text style={styles.content}>{content}</Text>}
+      {content && <ThemedText style={styles.content}>{content}</ThemedText>}
+      <TouchableOpacity style={styles.logout} onPress={handleLogout}>
+        <ThemedText type="link">Sign Out</ThemedText>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -33,5 +47,8 @@ const styles = StyleSheet.create({
   content: {
     marginTop: 20,
     textAlign: 'center',
+  },
+  logout: {
+    marginTop: 24,
   },
 });

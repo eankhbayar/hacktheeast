@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import authRoutes from './routes/auth';
+import { ensureTableExists } from './config/dynamodb';
 
 dotenv.config();
 
@@ -11,9 +13,16 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
+app.use('/auth', authRoutes);
+
+async function start() {
+  await ensureTableExists();
+  app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-});
+  });
+}
+
+start();
