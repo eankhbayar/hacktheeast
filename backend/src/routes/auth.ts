@@ -25,6 +25,7 @@ function toUserResponse(user: User): UserResponse {
     email: user.email,
     fullName: user.fullName,
     phoneNumber: user.phoneNumber,
+    role: user.role,
     createdAt: user.createdAt,
   };
 }
@@ -52,6 +53,7 @@ router.post('/register', registerValidator, async (req: Request, res: Response) 
     passwordHash,
     fullName,
     phoneNumber,
+    role: 'parent',
     createdAt: now,
     updatedAt: now,
   };
@@ -154,6 +156,37 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 
   res.json(toUserResponse(user));
+});
+
+/**
+ * Re-verify parent password. Used to exit Kid Mode back to the parent
+ * dashboard — prevents kids from switching out on their own.
+ */
+router.post('/verify-password', authMiddleware, async (req: AuthRequest, res: Response) => {
+  if (!req.user) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const { password } = req.body;
+  if (!password) {
+    res.status(400).json({ error: 'Password is required' });
+    return;
+  }
+
+  const user = await findById(req.user.userId);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) {
+    res.status(401).json({ error: 'Invalid password' });
+    return;
+  }
+
+  res.json({ verified: true });
 });
 
 export default router;
