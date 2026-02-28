@@ -71,7 +71,7 @@ jobs:
           if [ -z "$AGENT_RUNTIME_ID" ]; then
             echo "Creating new AgentCore Runtime..."
             RESPONSE=$(aws bedrock-agentcore-control create-agent-runtime \
-              --agent-runtime-name learning-agent \
+              --agent-runtime-name learning_agent \
               --agent-runtime-artifact "{
                 \"codeConfiguration\": {
                   \"code\": {
@@ -103,7 +103,7 @@ jobs:
             echo "Creating endpoint..."
             aws bedrock-agentcore-control create-agent-runtime-endpoint \
               --agent-runtime-id "$RUNTIME_ID" \
-              --name learning-agent-endpoint
+              --name learning_agent_endpoint
           else
             echo "Updating existing AgentCore Runtime: $AGENT_RUNTIME_ID"
             aws bedrock-agentcore-control update-agent-runtime \
