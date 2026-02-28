@@ -98,18 +98,38 @@ export interface Question {
   createdAt: string;
 }
 
-// ─── Lesson (Remedial Video) ────────────────────────────────────────────────
+// ─── Lesson (AI-Generated) ──────────────────────────────────────────────────
+
+export interface LessonActivity {
+  type: 'explanation' | 'practice' | 'review';
+  content: string;
+  analogyUsed: string;
+}
+
+export interface LessonPlan {
+  title: string;
+  learningObjectives: string[];
+  durationMinutes: number;
+  activities: LessonActivity[];
+}
+
+export interface VideoScene {
+  visualCue: string;
+  dialogue: string;
+  durationSeconds: number;
+}
+
+export interface VideoScript {
+  scenes: VideoScene[];
+}
 
 export interface Lesson {
   lessonId: string;
-  sessionId: string;
   childId: string;
   topic: string;
-  videoUrl: string;
-  description: string;
-  durationSeconds: number;
-  watchCount: number;
-  triggerQuestionId: string;
+  lessonPlan: LessonPlan;
+  videoScript?: VideoScript;
+  status: 'success' | 'partial_success';
   createdAt: string;
 }
 

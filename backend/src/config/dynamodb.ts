@@ -138,13 +138,13 @@ const TABLE_DEFINITIONS: CreateTableCommandInput[] = [
     TableName: TABLES.LESSONS,
     AttributeDefinitions: [
       { AttributeName: 'lessonId', AttributeType: 'S' },
-      { AttributeName: 'sessionId', AttributeType: 'S' },
+      { AttributeName: 'childId', AttributeType: 'S' },
     ],
     KeySchema: [{ AttributeName: 'lessonId', KeyType: 'HASH' }],
     GlobalSecondaryIndexes: [
       {
-        IndexName: 'sessionId-index',
-        KeySchema: [{ AttributeName: 'sessionId', KeyType: 'HASH' }],
+        IndexName: 'childId-index',
+        KeySchema: [{ AttributeName: 'childId', KeyType: 'HASH' }],
         Projection: { ProjectionType: 'ALL' },
       },
     ],

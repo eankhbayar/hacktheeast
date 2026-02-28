@@ -3,6 +3,7 @@ import { body, validationResult } from 'express-validator';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { invokeAgent } from '../services/agentcore';
 import { getProgress } from '../services/progress';
+import { saveLesson, getLesson, getLessonsByChild } from '../services/lesson';
 import type { AgentRequest } from '../types';
 
 const router = Router();
@@ -54,6 +55,17 @@ router.post(
     try {
       const sessionId = req.headers['x-agent-session-id'] as string | undefined;
       const result = await invokeAgent(payload, sessionId);
+
+      if (result.status !== 'error' && result.data?.lessonPlan && payload.requestType === 'lesson') {
+        const topic = result.data.lessonPlan &&
+          typeof result.data.lessonPlan === 'object' &&
+          'title' in result.data.lessonPlan
+          ? String((result.data.lessonPlan as Record<string, unknown>).title)
+          : 'general';
+        const lesson = await saveLesson(payload.childId, topic, result);
+        result.data.lessonId = lesson.lessonId;
+      }
+
       const statusCode = result.status === 'error' ? 502 : 200;
       res.status(statusCode).json(result);
     } catch (err) {
@@ -97,6 +109,17 @@ router.post(
     try {
       const sessionId = req.headers['x-agent-session-id'] as string | undefined;
       const result = await invokeAgent(payload, sessionId);
+
+      if (result.status !== 'error' && result.data?.lessonPlan) {
+        const topic = result.data.lessonPlan &&
+          typeof result.data.lessonPlan === 'object' &&
+          'title' in result.data.lessonPlan
+          ? String((result.data.lessonPlan as Record<string, unknown>).title)
+          : 'general';
+        const lesson = await saveLesson(payload.childId, topic, result);
+        result.data.lessonId = lesson.lessonId;
+      }
+
       const statusCode = result.status === 'error' ? 502 : 200;
       res.status(statusCode).json(result);
     } catch (err) {
@@ -145,6 +168,42 @@ router.post(
         status: 'error',
         message: 'Agent service unavailable. Please try again.',
       });
+    }
+  }
+);
+
+router.get(
+  '/lessons/:childId',
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const childId = String(req.params.childId);
+      const limit = Math.min(parseInt(String(req.query.limit)) || 20, 100);
+      const lessons = await getLessonsByChild(childId, limit);
+      res.json({ lessons });
+    } catch (err) {
+      console.error('Failed to fetch lessons:', err);
+      res.status(500).json({ status: 'error', message: 'Failed to fetch lessons' });
+    }
+  }
+);
+
+router.get(
+  '/lessons/:childId/:lessonId',
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const childId = String(req.params.childId);
+      const lessonId = String(req.params.lessonId);
+      const lesson = await getLesson(lessonId);
+      if (!lesson || lesson.childId !== childId) {
+        res.status(404).json({ status: 'error', message: 'Lesson not found' });
+        return;
+      }
+      res.json({ lesson });
+    } catch (err) {
+      console.error('Failed to fetch lesson:', err);
+      res.status(500).json({ status: 'error', message: 'Failed to fetch lesson' });
     }
   }
 );
