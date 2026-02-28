@@ -95,7 +95,7 @@ export default function ChildModeScreen() {
         </View>
 
         {/* 10s test timer */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.testBtn}
           onPress={handleTestTimer}
           activeOpacity={0.8}
@@ -106,7 +106,7 @@ export default function ChildModeScreen() {
               ? `Challenge in ${secondsLeft}s...`
               : 'Test 10s Timer'}
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         <View style={styles.spacer} />
 

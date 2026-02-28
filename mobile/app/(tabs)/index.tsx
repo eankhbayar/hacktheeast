@@ -36,8 +36,13 @@ export default function HomeScreen() {
   } = useChallenge();
   const [, setTick] = useState(0);
   const [showAlarmPermission, setShowAlarmPermission] = useState(false);
+  const [selectedKidId, setSelectedKidId] = useState<string | null>(null);
 
   const activeKids = useMemo(() => kids.filter((k) => k.active), [kids]);
+  const selectedKid = useMemo(
+    () => activeKids.find((k) => k.id === selectedKidId) ?? null,
+    [activeKids, selectedKidId],
+  );
   const firstActiveInterval = activeKids[0]?.intervalMinutes;
 
   useEffect(() => {
@@ -68,10 +73,18 @@ export default function HomeScreen() {
     router.replace('/(auth)/login');
   };
 
+  useEffect(() => {
+    if (activeKids.length > 0 && !selectedKid) {
+      setSelectedKidId(activeKids[0].id);
+    }
+    if (selectedKidId && !activeKids.find((k) => k.id === selectedKidId)) {
+      setSelectedKidId(activeKids[0]?.id ?? null);
+    }
+  }, [activeKids, selectedKid, selectedKidId]);
+
   const handleChildMode = async () => {
-    const kid = activeKids[0];
-    if (!kid) return;
-    enterChildMode(kid);
+    if (!selectedKid) return;
+    enterChildMode(selectedKid);
     router.replace('/child-mode');
     logout();
   };
@@ -115,43 +128,63 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {activeKids.map((kid) => (
-            <View key={kid.id} style={styles.timerCard}>
-              <View style={[styles.kidDot, { backgroundColor: kid.avatarColor }]}>
-                <Text style={styles.kidDotEmoji}>{kid.avatarEmoji}</Text>
-              </View>
-              <View style={styles.timerContent}>
-                <Text style={styles.activeKidName}>{kid.name}</Text>
-                <Text style={styles.timerLabel}>Next Challenge In</Text>
-                <Text style={styles.timerValue}>
-                  {minutesUntilNext !== null ? `${minutesUntilNext} min` : '—'}
-                </Text>
-              </View>
-              <View style={styles.intervalBadge}>
-                <Text style={styles.intervalBadgeText}>
-                  Every {kid.intervalMinutes} min
-                </Text>
-              </View>
-            </View>
-          ))}
+          {activeKids.length > 0 && (
+            <Text style={styles.sectionLabel}>Select a kid for Child Mode</Text>
+          )}
+
+          {activeKids.map((kid) => {
+            const isSelected = kid.id === selectedKidId;
+            return (
+              <TouchableOpacity
+                key={kid.id}
+                style={[styles.timerCard, isSelected && styles.timerCardSelected]}
+                onPress={() => setSelectedKidId(kid.id)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.kidDot, { backgroundColor: kid.avatarColor }]}>
+                  <Text style={styles.kidDotEmoji}>{kid.avatarEmoji}</Text>
+                </View>
+                <View style={styles.timerContent}>
+                  <Text style={styles.activeKidName}>{kid.name}</Text>
+                  <Text style={styles.timerLabel}>Next Challenge In</Text>
+                  <Text style={styles.timerValue}>
+                    {minutesUntilNext !== null ? `${minutesUntilNext} min` : '—'}
+                  </Text>
+                </View>
+                {isSelected ? (
+                  <View style={styles.selectedBadge}>
+                    <Text style={styles.selectedBadgeText}>Selected</Text>
+                  </View>
+                ) : (
+                  <View style={styles.intervalBadge}>
+                    <Text style={styles.intervalBadgeText}>
+                      Every {kid.intervalMinutes} min
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
 
           {/* Test Challenge Button */}
-          <TouchableOpacity
+          {/* <TouchableOpacity
             style={styles.testBtn}
             onPress={triggerChallenge}
             activeOpacity={0.8}
           >
             <Text style={styles.testBtnText}>Test Challenge Now</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           {/* Child Mode Button */}
           <TouchableOpacity
-            style={[styles.childModeBtn, activeKids.length === 0 && styles.childModeBtnDisabled]}
+            style={[styles.childModeBtn, !selectedKid && styles.childModeBtnDisabled]}
             onPress={handleChildMode}
             activeOpacity={0.8}
-            disabled={activeKids.length === 0}
+            disabled={!selectedKid}
           >
-            <Text style={styles.childModeBtnText}>Child Mode</Text>
+            <Text style={styles.childModeBtnText}>
+              {selectedKid ? `Start Child Mode for ${selectedKid.name}` : 'Child Mode'}
+            </Text>
           </TouchableOpacity>
 
           {/* Sign Out */}
@@ -239,6 +272,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: DARK_OLIVE,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
   // Timer Card
   timerCard: {
     backgroundColor: WHITE,
@@ -247,11 +289,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.07,
     shadowRadius: 10,
     elevation: 3,
+  },
+  timerCardSelected: {
+    borderColor: '#FF9800',
   },
   kidDot: {
     width: 52,
@@ -295,6 +342,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: DARK_OLIVE,
+  },
+  selectedBadge: {
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  selectedBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: WHITE,
   },
 
   // Test Button
