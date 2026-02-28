@@ -17,6 +17,7 @@ import Animated, {
   useAnimatedStyle,
   withSequence,
   withTiming,
+  interpolateColor,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -41,9 +42,14 @@ export function ChallengeOverlay() {
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState('');
   const shakeX = useSharedValue(0);
+  const bgFlash = useSharedValue(0);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shakeX.value }],
+  }));
+
+  const overlayAnimatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(bgFlash.value, [0, 1], [YELLOW, '#D32F2F']),
   }));
 
   const shake = () => {
@@ -53,6 +59,13 @@ export function ChallengeOverlay() {
       withTiming(-10, { duration: 50 }),
       withTiming(10, { duration: 50 }),
       withTiming(0, { duration: 50 })
+    );
+  };
+
+  const flashRed = () => {
+    bgFlash.value = withSequence(
+      withTiming(1, { duration: 150 }),
+      withTiming(0, { duration: 350 })
     );
   };
 
@@ -105,6 +118,7 @@ export function ChallengeOverlay() {
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       shake();
+      flashRed();
       setError('Wrong answer. Try again!');
     }
   };
@@ -112,9 +126,10 @@ export function ChallengeOverlay() {
   if (!isChallengeActive || !user) return null;
 
   return (
-    <View
+    <Animated.View
       style={[
         styles.overlay,
+        overlayAnimatedStyle,
         {
           paddingTop: insets.top,
           paddingBottom: insets.bottom,
@@ -176,7 +191,7 @@ export function ChallengeOverlay() {
           <Text style={styles.buttonText}>Submit</Text>
         </TouchableOpacity>
       </KeyboardAvoidingView>
-    </View>
+    </Animated.View>
   );
 }
 
