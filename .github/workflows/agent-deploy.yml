@@ -37,7 +37,7 @@ jobs:
       - name: Create deployment ZIP
         working-directory: agent
         run: |
-          cp -r src/* deployment_package/
+          cp -r src deployment_package/src
           cd deployment_package
           zip -r ../deployment_package.zip .
 
@@ -99,6 +99,17 @@ jobs:
             echo "IMPORTANT: Add these GitHub secrets:"
             echo "  AGENT_RUNTIME_ID=$RUNTIME_ID"
             echo "  AGENT_RUNTIME_ARN=$RUNTIME_ARN"
+
+            echo "Waiting for runtime to be READY..."
+            for i in $(seq 1 30); do
+              STATUS=$(aws bedrock-agentcore-control get-agent-runtime \
+                --agent-runtime-id "$RUNTIME_ID" \
+                --query 'status' --output text 2>/dev/null || echo "UNKNOWN")
+              echo "  Attempt $i: status=$STATUS"
+              if [ "$STATUS" = "READY" ]; then break; fi
+              if echo "$STATUS" | grep -q "FAILED"; then echo "Runtime creation FAILED"; exit 1; fi
+              sleep 10
+            done
 
             echo "Creating endpoint..."
             aws bedrock-agentcore-control create-agent-runtime-endpoint \
