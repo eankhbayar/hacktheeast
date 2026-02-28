@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -13,5 +13,8 @@ class ChildInput(BaseModel):
         default=None, alias="learningObjectives"
     )
     request_type: Literal["lesson", "report"] = Field(..., alias="requestType")
+    progress_records: Optional[list[dict[str, Any]]] = Field(
+        default=None, alias="progressRecords"
+    )
 
     model_config = {"populate_by_name": True}

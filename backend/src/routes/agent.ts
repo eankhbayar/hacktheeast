@@ -2,9 +2,23 @@ import { Router, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { invokeAgent } from '../services/agentcore';
+import { getProgress } from '../services/progress';
 import type { AgentRequest } from '../types';
 
 const router = Router();
+
+async function fetchProgressRecords(childId: string) {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const startDate = thirtyDaysAgo.toISOString().slice(0, 10);
+  const endDate = new Date().toISOString().slice(0, 10);
+
+  try {
+    return await getProgress(childId, startDate, endDate);
+  } catch {
+    return [];
+  }
+}
 
 const validateInvoke = [
   body('childId').isString().notEmpty(),
@@ -26,12 +40,15 @@ router.post(
       return;
     }
 
+    const progressRecords = await fetchProgressRecords(req.body.childId);
+
     const payload: AgentRequest = {
       childId: req.body.childId,
       ageGroup: req.body.ageGroup,
       requestType: req.body.requestType,
       interests: req.body.interests,
       learningObjectives: req.body.learningObjectives,
+      progressRecords,
     };
 
     try {
@@ -66,12 +83,15 @@ router.post(
       return;
     }
 
+    const progressRecords = await fetchProgressRecords(req.body.childId);
+
     const payload: AgentRequest = {
       childId: req.body.childId,
       ageGroup: req.body.ageGroup,
       requestType: 'lesson',
       interests: req.body.interests,
       learningObjectives: req.body.learningObjectives,
+      progressRecords,
     };
 
     try {
@@ -104,11 +124,14 @@ router.post(
       return;
     }
 
+    const progressRecords = await fetchProgressRecords(req.body.childId);
+
     const payload: AgentRequest = {
       childId: req.body.childId,
       ageGroup: req.body.ageGroup,
       requestType: 'report',
       interests: req.body.interests,
+      progressRecords,
     };
 
     try {

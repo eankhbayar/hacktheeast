@@ -189,6 +189,7 @@ export interface AgentRequest {
   interests?: string;
   learningObjectives?: string[];
   requestType: 'lesson' | 'report';
+  progressRecords?: ProgressRecord[];
 }
 
 export interface AgentResponse {

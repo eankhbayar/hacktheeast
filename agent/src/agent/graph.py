@@ -10,6 +10,7 @@ from src.agent.planner import planner_generate
 from src.agent.reporter import reporter_generate
 from src.agent.state import AgentState
 from src.observability import traced_operation
+from src.models.progress import ProgressRecord
 from src.tools.exa_search import search_parenting_context, search_teaching_context
 from src.tools.s3_data import build_historical_summary, get_progress_records
 
@@ -17,10 +18,16 @@ logger = logging.getLogger(__name__)
 
 
 def load_history(state: AgentState) -> dict[str, Any]:
-    """Fetch progress records from S3 and build a historical summary."""
+    """Build historical summary from inline progress records or S3 fallback."""
     child_input = state["input"]
     with traced_operation("load_history", {"child_id": child_input.child_id}):
-        records = get_progress_records(child_input.child_id)
+        if child_input.progress_records:
+            records = [
+                ProgressRecord.model_validate(r)
+                for r in child_input.progress_records
+            ]
+        else:
+            records = get_progress_records(child_input.child_id)
         history = build_historical_summary(child_input.child_id, records)
     return {"history": history}
 
