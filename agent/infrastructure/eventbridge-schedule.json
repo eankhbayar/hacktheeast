@@ -1,0 +1,23 @@
+{
+  "Comment": "EventBridge Scheduler configuration for automated progress reports.",
+  "ScheduleExpression": "cron(0 20 ? * SUN *)",
+  "ScheduleExpressionTimezone": "America/New_York",
+  "Description": "Weekly Sunday 8 PM report generation for all children",
+  "FlexibleTimeWindow": {
+    "Mode": "FLEXIBLE",
+    "MaximumWindowInMinutes": 15
+  },
+  "Target": {
+    "Arn": "<LAMBDA_FUNCTION_ARN>",
+    "RoleArn": "<EVENTBRIDGE_ROLE_ARN>",
+    "Input": {
+      "Comment": "The Lambda iterates over all child profiles in S3 and invokes AgentCore for each."
+    }
+  },
+  "SetupInstructions": {
+    "Step1": "Create a Lambda function (infrastructure/report_scheduler_lambda.py) that lists child profiles from S3 and invokes the agent for each.",
+    "Step2": "Create an EventBridge Scheduler rule using this config via: aws scheduler create-schedule --cli-input-json file://eventbridge-schedule.json",
+    "Step3": "Grant the EventBridge role permission to invoke the Lambda.",
+    "Step4": "Grant the Lambda role permission to invoke bedrock-agentcore:InvokeAgentRuntime."
+  }
+}
