@@ -9,11 +9,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
 import { AlarmPermissionModal } from '@/components/alarm-permission-modal';
 import { KidProfileCard } from '@/components/kid-profile-card';
 import { KidProfileModal } from '@/components/kid-profile-modal';
-import type { KidProfile } from '@/data/kids';
+import type { KidView } from '@/types/children';
 import { useKids } from '@/contexts/kids';
 import { useAuth } from '@/hooks/use-auth';
 import { useChallenge } from '@/hooks/use-challenge';
@@ -25,34 +24,40 @@ const YELLOW = '#FFD600';
 const DARK = '#2E2E00';
 const DARK_OLIVE = '#3D3B00';
 const WHITE = '#FFFFFF';
-const ACCENT_RED = '#D32F2F';
 
 export default function HomeScreen() {
-  const { user, logout } = useAuth();
-  const { kids, updateKidInterval, updateKidTopics } = useKids();
+  const { user } = useAuth();
   const {
-    minutesUntilNext,
-    setIntervalMinutes,
-    triggerChallenge,
-  } = useChallenge();
+    kids,
+    loading,
+    activeChildId,
+    setActiveChildId,
+    updateKidInterval,
+    updateKidTopics,
+  } = useKids();
+  const { minutesUntilNext, setIntervalMinutes, triggerChallenge } = useChallenge();
   const [, setTick] = useState(0);
   const [showAlarmPermission, setShowAlarmPermission] = useState(false);
-  const [selectedKid, setSelectedKid] = useState<KidProfile | null>(null);
-  const [activeKidId, setActiveKidId] = useState<string>(kids[0]?.id ?? '');
+  const [selectedKid, setSelectedKid] = useState<KidView | null>(null);
 
-  const activeKid = kids.find((k) => k.id === activeKidId) ?? kids[0];
+  const activeKid = kids.find((k) => k.childId === activeChildId) ?? kids[0];
 
   useEffect(() => {
     if (activeKid) setIntervalMinutes(activeKid.intervalMinutes);
   }, [activeKid, setIntervalMinutes]);
 
-  const handleUpdateInterval = (kidId: string, minutes: number) => {
-    updateKidInterval(kidId, minutes);
-    if (activeKidId === kidId) setIntervalMinutes(minutes);
+  const handleUpdateInterval = (childId: string, minutes: number) => {
+    void updateKidInterval(childId, minutes);
+    if (activeChildId === childId) setIntervalMinutes(minutes);
   };
 
-  const handleUpdateTopics = (kidId: string, topics: string[]) => {
-    updateKidTopics(kidId, topics);
+  const handleUpdateTopics = (childId: string, topics: string[]) => {
+    void updateKidTopics(childId, topics);
+  };
+
+  const handleKidPress = (kid: KidView) => {
+    setActiveChildId(kid.childId);
+    setSelectedKid(kid);
   };
 
   useEffect(() => {
@@ -74,11 +79,6 @@ export default function HomeScreen() {
     AsyncStorage.setItem(STORAGE_KEY_ALARM_PERMISSION_ASKED, 'true');
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/(auth)/login');
-  };
-
   const firstName = user?.fullName?.split(' ')[0] ?? '';
 
   return (
@@ -88,7 +88,7 @@ export default function HomeScreen() {
         onDismiss={handleAlarmPermissionDismiss}
       />
       <KidProfileModal
-        kid={selectedKid ? kids.find((k) => k.id === selectedKid.id) ?? selectedKid : null}
+        kid={selectedKid ? kids.find((k) => k.childId === selectedKid.childId) ?? selectedKid : null}
         visible={!!selectedKid}
         onClose={() => setSelectedKid(null)}
         onUpdateInterval={handleUpdateInterval}
@@ -100,6 +100,12 @@ export default function HomeScreen() {
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
         >
+          {loading ? (
+            <View style={styles.loadingWrap}>
+              <Text style={styles.loadingText}>Loading...</Text>
+            </View>
+          ) : (
+            <>
           {/* Header */}
           <View style={styles.header}>
             <View>
@@ -116,7 +122,7 @@ export default function HomeScreen() {
           {/* Mascot + Timer Card */}
           <View style={styles.timerCard}>
             <Image source={BlipRobot} style={styles.mascotImage} resizeMode="contain" />
-            <Text style={styles.activeKidName}>{activeKid.name}</Text>
+            <Text style={styles.activeKidName}>{activeKid?.name ?? 'Select a kid'}</Text>
             <Text style={styles.timerLabel}>Next Challenge In</Text>
             <Text style={styles.timerValue}>
               {minutesUntilNext !== null ? `${minutesUntilNext} min` : '—'}
@@ -124,7 +130,7 @@ export default function HomeScreen() {
             <View style={styles.timerDivider} />
             <View style={styles.intervalBadge}>
               <Text style={styles.intervalBadgeText}>
-                Every {activeKid.intervalMinutes} min
+                Every {activeKid?.intervalMinutes ?? 30} min
               </Text>
             </View>
           </View>
@@ -144,26 +150,16 @@ export default function HomeScreen() {
             <View style={styles.profileGrid}>
               {kids.map((kid) => (
                 <KidProfileCard
-                  key={kid.id}
+                  key={kid.childId}
                   kid={kid}
-                  isActive={kid.id === activeKidId}
-                  onPress={(k) => {
-                    setActiveKidId(k.id);
-                    setSelectedKid(k);
-                  }}
+                  isActive={kid.childId === activeChildId}
+                  onPress={handleKidPress}
                 />
               ))}
             </View>
           </View>
-
-          {/* Sign Out */}
-          <TouchableOpacity
-            style={styles.logoutBtn}
-            onPress={handleLogout}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.logoutText}>Sign Out</Text>
-          </TouchableOpacity>
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </>
@@ -273,6 +269,15 @@ const styles = StyleSheet.create({
     color: DARK_OLIVE,
   },
 
+  loadingWrap: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: DARK_OLIVE,
+  },
+
   // Sections
   section: {
     marginBottom: 24,
@@ -309,17 +314,5 @@ const styles = StyleSheet.create({
     color: YELLOW,
     fontSize: 16,
     fontWeight: '700',
-  },
-
-  // Logout
-  logoutBtn: {
-    alignItems: 'center',
-    paddingVertical: 14,
-    marginTop: 8,
-  },
-  logoutText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: ACCENT_RED,
   },
 });

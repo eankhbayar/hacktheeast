@@ -56,7 +56,7 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ secrets.ECR_REPO_NAME }}
-          DYNAMODB_TABLE: ${{ secrets.DYNAMODB_TABLE_NAME }}
+          DYNAMODB_TABLE_PREFIX: ${{ secrets.DYNAMODB_TABLE_PREFIX }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
         run: |
@@ -71,7 +71,7 @@ jobs:
             docker run -d --name hacktheeast-backend --restart unless-stopped -p 3000:3000 \
               -e PORT=3000 \
               -e AWS_REGION=$AWS_REGION \
-              -e DYNAMODB_TABLE_NAME=$DYNAMODB_TABLE \
+              -e DYNAMODB_TABLE_PREFIX=$DYNAMODB_TABLE_PREFIX \
               -e JWT_SECRET='$JWT_SECRET' \
               -e JWT_REFRESH_SECRET='$JWT_REFRESH_SECRET' \
               $ECR_REGISTRY/$ECR_REPOSITORY:latest"

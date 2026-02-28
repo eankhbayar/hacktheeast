@@ -17,8 +17,9 @@ import {
   scheduleNagNotifications,
   cancelNagNotifications,
 } from '@/services/notifications';
-import { startAlarmSound, stopAlarmSound } from '@/services/alarm-sound';
+import { stopAlarmSound } from '@/services/alarm-sound';
 import { checkLaunchPayload } from '@/services/alarm-kit';
+import { useKids } from '@/contexts/kids';
 
 const STORAGE_KEYS = {
   INTERVAL_MINUTES: 'challenge_interval_minutes',
@@ -36,11 +37,14 @@ interface ChallengeContextType {
   triggerChallenge: () => void;
   dismissChallenge: () => void;
   minutesUntilNext: number | null;
+  /** Child ID for the active profile (used when triggering session API). */
+  activeChildId: string | null;
 }
 
 const ChallengeContext = createContext<ChallengeContextType | null>(null);
 
 export function ChallengeProvider({ children }: { children: React.ReactNode }) {
+  const { activeChildId } = useKids();
   const [isChallengeActive, setIsChallengeActive] = useState(false);
   const [nextChallengeAt, setNextChallengeAt] = useState<number | null>(null);
   const [intervalMinutes, setIntervalMinutesState] = useState(DEFAULT_INTERVAL_MINUTES);
@@ -51,9 +55,6 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
   const activateChallenge = useCallback(() => {
     setIsChallengeActive(true);
     AsyncStorage.setItem(STORAGE_KEYS.IS_ACTIVE, 'true');
-    if (AppState.currentState === 'active') {
-      startAlarmSound();
-    }
   }, []);
 
   const persistAndSchedule = useCallback(
@@ -112,23 +113,6 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     nextChallengeAt && !isChallengeActive
       ? Math.max(0, Math.ceil((nextChallengeAt - Date.now()) / 60000))
       : null;
-
-  // Re-engage alarm when app returns to foreground while challenge is active
-  useEffect(() => {
-    const handleAppStateChange = (nextAppState: AppStateStatus) => {
-      if (
-        appStateRef.current.match(/inactive|background/) &&
-        nextAppState === 'active' &&
-        isChallengeActive
-      ) {
-        startAlarmSound();
-      }
-      appStateRef.current = nextAppState;
-    };
-
-    const sub = AppState.addEventListener('change', handleAppStateChange);
-    return () => sub.remove();
-  }, [isChallengeActive]);
 
   // Check for missed challenges when returning from background
   useEffect(() => {
@@ -242,6 +226,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
         triggerChallenge,
         dismissChallenge,
         minutesUntilNext,
+        activeChildId,
       }}
     >
       {children}

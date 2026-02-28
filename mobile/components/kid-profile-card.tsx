@@ -1,5 +1,5 @@
 import { StyleSheet, TouchableOpacity, View, Text } from 'react-native';
-import type { KidProfile } from '@/data/kids';
+import type { KidView } from '@/types/children';
 
 const YELLOW = '#FFD600';
 const DARK = '#2E2E00';
@@ -7,9 +7,9 @@ const DARK_OLIVE = '#3D3B00';
 const WHITE = '#FFFFFF';
 
 interface KidProfileCardProps {
-  kid: KidProfile;
+  kid: KidView;
   isActive?: boolean;
-  onPress: (kid: KidProfile) => void;
+  onPress: (kid: KidView) => void;
 }
 
 export function KidProfileCard({ kid, isActive, onPress }: KidProfileCardProps) {
@@ -28,7 +28,7 @@ export function KidProfileCard({ kid, isActive, onPress }: KidProfileCardProps) 
         <Text style={styles.avatarEmoji}>{kid.avatarEmoji}</Text>
       </View>
       <Text style={styles.name}>{kid.name}</Text>
-      <Text style={styles.age}>Age {kid.age}</Text>
+      <Text style={styles.age}>Ages {kid.ageGroup}</Text>
     </TouchableOpacity>
   );
 }

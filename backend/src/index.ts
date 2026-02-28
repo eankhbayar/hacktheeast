@@ -7,6 +7,7 @@ import childrenRoutes from './routes/children';
 import schedulesRoutes from './routes/schedules';
 import sessionsRoutes from './routes/sessions';
 import dashboardRoutes from './routes/dashboard';
+import notificationsRoutes from './routes/notifications';
 import { ensureTablesExist } from './config/dynamodb';
 
 dotenv.config();
@@ -24,9 +25,9 @@ app.get('/health', (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/questions', questionsRoutes);
 app.use('/children', childrenRoutes);
-app.use('/children', schedulesRoutes);
 app.use('/sessions', sessionsRoutes);
 app.use('/dashboard', dashboardRoutes);
+app.use('/notifications', notificationsRoutes);
 
 async function start() {
   await ensureTablesExist();

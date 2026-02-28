@@ -9,7 +9,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
-import type { KidProfile } from '@/data/kids';
+import type { KidView } from '@/types/children';
 
 const INTERVAL_OPTIONS = [15, 30, 45, 60];
 
@@ -19,11 +19,11 @@ const DARK_OLIVE = '#3D3B00';
 const WHITE = '#FFFFFF';
 
 interface KidProfileModalProps {
-  kid: KidProfile | null;
+  kid: KidView | null;
   visible: boolean;
   onClose: () => void;
-  onUpdateInterval: (kidId: string, minutes: number) => void;
-  onUpdateTopics: (kidId: string, topics: string[]) => void;
+  onUpdateInterval: (childId: string, minutes: number) => void | Promise<void>;
+  onUpdateTopics: (childId: string, topics: string[]) => void | Promise<void>;
 }
 
 export function KidProfileModal({
@@ -40,17 +40,17 @@ export function KidProfileModal({
   if (!kid) return null;
 
   const handleIntervalChange = (minutes: number) => {
-    onUpdateInterval(kid.id, minutes);
+    void onUpdateInterval(kid.childId, minutes);
   };
 
   const handleRemoveTopic = (topic: string) => {
-    onUpdateTopics(kid.id, kid.currentTopicSet.filter((t) => t !== topic));
+    void onUpdateTopics(kid.childId, kid.learningFocus.filter((t) => t !== topic));
   };
 
   const handleAddTopic = () => {
     const trimmed = newTopic.trim();
-    if (!trimmed || kid.currentTopicSet.includes(trimmed)) return;
-    onUpdateTopics(kid.id, [...kid.currentTopicSet, trimmed]);
+    if (!trimmed || kid.learningFocus.includes(trimmed)) return;
+    void onUpdateTopics(kid.childId, [...kid.learningFocus, trimmed]);
     setNewTopic('');
   };
 
@@ -80,16 +80,7 @@ export function KidProfileModal({
                 <Text style={styles.avatarEmoji}>{kid.avatarEmoji}</Text>
               </View>
               <Text style={styles.name}>{kid.name}</Text>
-              <Text style={styles.age}>Age {kid.age}</Text>
-            </View>
-
-            {/* Last Activity */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionIcon}>🕐</Text>
-                <Text style={styles.sectionTitle}>Last Activity</Text>
-              </View>
-              <Text style={styles.sectionBody}>{kid.lastActivity}</Text>
+              <Text style={styles.age}>Ages {kid.ageGroup}</Text>
             </View>
 
             {/* Peak Interests */}
@@ -99,7 +90,7 @@ export function KidProfileModal({
                 <Text style={styles.sectionTitle}>Peak Interests</Text>
               </View>
               <View style={styles.chipRow}>
-                {kid.peakInterests.map((interest) => (
+                {kid.interests.map((interest) => (
                   <View key={interest} style={styles.chip}>
                     <Text style={styles.chipText}>{interest}</Text>
                   </View>
@@ -114,7 +105,7 @@ export function KidProfileModal({
                 <Text style={styles.sectionTitle}>Current Topics</Text>
               </View>
               <View style={styles.chipRow}>
-                {kid.currentTopicSet.map((topic) => (
+                {kid.learningFocus.map((topic) => (
                   <View key={topic} style={[styles.chip, styles.chipTopic]}>
                     <Text style={[styles.chipText, styles.chipTopicText]}>{topic}</Text>
                   </View>
@@ -170,7 +161,7 @@ export function KidProfileModal({
             >
               <View>
                 <Text style={styles.actionBtnText}>Manage Topics</Text>
-                <Text style={styles.actionBtnSub}>{kid.currentTopicSet.length} topics</Text>
+                <Text style={styles.actionBtnSub}>{kid.learningFocus.length} topics</Text>
               </View>
               <Text style={styles.actionArrow}>{showTopicEditor ? '‹' : '›'}</Text>
             </TouchableOpacity>
@@ -178,7 +169,7 @@ export function KidProfileModal({
             {showTopicEditor && (
               <View style={styles.expandedSection}>
                 <View style={styles.chipRow}>
-                  {kid.currentTopicSet.map((topic) => (
+                  {kid.learningFocus.map((topic) => (
                     <TouchableOpacity
                       key={topic}
                       style={[styles.chip, styles.chipRemovable]}
