@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Blip",
+    "slug": "blip",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "blip",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ankhbayar.blip",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio", "fetch", "remote-notification"],
+        "NSAlarmKitUsageDescription": "This app uses alarms to interrupt you at scheduled times with challenges."
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.ankhbayar.blip"],
+        "com.apple.developer.usernotifications.critical-alerts": true
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.ankhbayar.blip",
+      "permissions": [
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "ios": {
+            "mode": "production"
+          },
+          "sounds": ["./assets/sounds/alarm.mp3"]
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "extra": {
+      "apiUrl": "http://10.89.73.138:3000"
+    }
+  }
+}
