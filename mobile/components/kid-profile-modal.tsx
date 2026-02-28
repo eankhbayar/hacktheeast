@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,20 +8,41 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import type { KidView } from '@/types/children';
+import { fetchChildProgress } from '@/services/dashboard';
 
 const INTERVAL_OPTIONS = [15, 30, 45, 60];
 
-const WEEKLY_DATA = [
-  { day: 'Mon', correct: 5, total: 8 },
-  { day: 'Tue', correct: 3, total: 6 },
-  { day: 'Wed', correct: 7, total: 9 },
-  { day: 'Thu', correct: 4, total: 7 },
-  { day: 'Fri', correct: 6, total: 6 },
-  { day: 'Sat', correct: 2, total: 5 },
-  { day: 'Sun', correct: 1, total: 10 },
-];
+function mapProgressToChartData(
+  dailyRecords: Array<{
+    date: string;
+    correctAnswers: number;
+    totalQuestions: number;
+  }>
+): Array<{ day: string; correct: number; total: number }> {
+  const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const byDay: Record<string, { correct: number; total: number }> = {};
+  dayOrder.forEach((d) => {
+    byDay[d] = { correct: 0, total: 0 };
+  });
+  for (const r of dailyRecords) {
+    const date = new Date(r.date);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+    if (dayName in byDay) {
+      byDay[dayName] = {
+        correct: r.correctAnswers,
+        total: r.totalQuestions,
+      };
+    }
+  }
+  return dayOrder.map((day) => ({
+    day,
+    correct: byDay[day].correct,
+    total: byDay[day].total,
+  }));
+}
 
 const YELLOW = '#FFD600';
 const DARK = '#2E2E00';
@@ -47,6 +68,21 @@ export function KidProfileModal({
   const [showTopicEditor, setShowTopicEditor] = useState(false);
   const [showWeeklyChart, setShowWeeklyChart] = useState(false);
   const [newTopic, setNewTopic] = useState('');
+  const [weeklyData, setWeeklyData] = useState<
+    Array<{ day: string; correct: number; total: number }>
+  >([]);
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
+
+  useEffect(() => {
+    if (!kid || !showWeeklyChart || !visible) return;
+    setWeeklyLoading(true);
+    fetchChildProgress(kid.childId, '7d')
+      .then((res) => {
+        setWeeklyData(mapProgressToChartData(res.dailyRecords));
+      })
+      .catch(() => setWeeklyData([]))
+      .finally(() => setWeeklyLoading(false));
+  }, [kid?.childId, showWeeklyChart, visible]);
 
   if (!kid) return null;
 
@@ -142,8 +178,15 @@ export function KidProfileModal({
                   <Text style={styles.sectionIcon}>📊</Text>
                   <Text style={styles.sectionTitle}>Past Week</Text>
                 </View>
+                {weeklyLoading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={DARK_OLIVE}
+                    style={styles.chartLoader}
+                  />
+                ) : (
                 <View style={styles.chartContainer}>
-                  {WEEKLY_DATA.map((d) => {
+                  {weeklyData.map((d) => {
                     const pct = d.total > 0 ? (d.correct / d.total) * 100 : 0;
                     return (
                       <View key={d.day} style={styles.chartColumn}>
@@ -165,6 +208,7 @@ export function KidProfileModal({
                     );
                   })}
                 </View>
+                )}
               </View>
             )}
 
@@ -387,6 +431,9 @@ const styles = StyleSheet.create({
 
   chartSection: {
     marginBottom: 18,
+  },
+  chartLoader: {
+    marginVertical: 16,
   },
   chartContainer: {
     flexDirection: 'row',

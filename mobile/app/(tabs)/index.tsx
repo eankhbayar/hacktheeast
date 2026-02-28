@@ -37,7 +37,7 @@ export default function HomeScreen() {
   const [, setTick] = useState(0);
   const [showAlarmPermission, setShowAlarmPermission] = useState(false);
 
-  const activeKids = useMemo(() => kids.filter((k) => k.active), [kids]);
+  const activeKids = useMemo(() => kids.filter((k) => k.isActive), [kids]);
   const firstActiveInterval = activeKids[0]?.intervalMinutes;
 
   useEffect(() => {
@@ -116,7 +116,7 @@ export default function HomeScreen() {
           )}
 
           {activeKids.map((kid) => (
-            <View key={kid.id} style={styles.timerCard}>
+            <View key={kid.childId} style={styles.timerCard}>
               <View style={[styles.kidDot, { backgroundColor: kid.avatarColor }]}>
                 <Text style={styles.kidDotEmoji}>{kid.avatarEmoji}</Text>
               </View>

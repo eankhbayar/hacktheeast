@@ -9,6 +9,7 @@ import {
   updateChild,
   deleteChild,
 } from '../services/child';
+import { seedDefaultQuestions } from '../services/question';
 import {
   createSchedule,
   getScheduleByChild,
@@ -60,6 +61,11 @@ router.post('/', authMiddleware, createChildValidator, async (req: AuthRequest, 
   };
 
   await createChild(child);
+  await seedDefaultQuestions(
+    child.childId,
+    child.ageGroup,
+    child.learningFocus
+  );
   res.status(201).json(child);
 });
 
@@ -180,7 +186,8 @@ router.put('/:childId', authMiddleware, updateChildValidator, async (req: AuthRe
     return;
   }
 
-  const { name, ageGroup, learningFocus, interests, avatarUrl, isActive } = req.body;
+  const { name, ageGroup, learningFocus, interests, avatarUrl, isActive } =
+    req.body;
   const updated = await updateChild(childId, {
     name,
     ageGroup,

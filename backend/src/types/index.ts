@@ -84,6 +84,9 @@ export interface Session {
 
 // ─── Question ────────────────────────────────────────────────────────────────
 
+export type QuestionSource = 'default' | 'ai_generated';
+export type QuestionStatus = 'ready' | 'used';
+
 export interface Question {
   questionId: string;
   sessionId: string;
@@ -96,6 +99,8 @@ export interface Question {
   isCorrect?: boolean;
   attemptNumber: number;
   createdAt: string;
+  source?: QuestionSource;
+  status?: QuestionStatus;
 }
 
 // ─── Lesson (AI-Generated) ──────────────────────────────────────────────────

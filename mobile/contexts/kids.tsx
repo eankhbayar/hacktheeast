@@ -1,73 +1,196 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
-import { KIDS, type KidProfile } from '@/data/kids';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from 'react';
+import {
+  fetchChildren,
+  getChild,
+  createChild,
+  updateChild,
+  deleteChild,
+  getSchedule,
+  createSchedule,
+  updateSchedule,
+  deleteSchedule,
+} from '@/services/children';
+import { toKidView } from '@/types/children';
+import type { KidView } from '@/types/children';
+import { useAuth } from '@/contexts/auth';
 
-const AVATAR_OPTIONS: { emoji: string; color: string }[] = [
-  { emoji: '👧', color: '#F8BBD0' },
-  { emoji: '👦', color: '#B3E5FC' },
-  { emoji: '👶', color: '#C8E6C9' },
-  { emoji: '🧒', color: '#FFE0B2' },
-  { emoji: '👱', color: '#D1C4E9' },
-  { emoji: '🧒', color: '#FFCCBC' },
-];
+function ageToAgeGroup(age: number): string {
+  if (age <= 8) return '6-8';
+  if (age <= 12) return '9-12';
+  return '13-15';
+}
+
+const DEFAULT_SCHEDULE = {
+  intervalMinutes: 30,
+  activeDays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as string[],
+  activeStartTime: '08:00',
+  activeEndTime: '21:00',
+};
 
 interface KidsContextType {
-  kids: KidProfile[];
-  addKid: (name: string, age: number) => KidProfile;
-  updateKidInterval: (kidId: string, minutes: number) => void;
-  updateKidTopics: (kidId: string, topics: string[]) => void;
-  toggleKidActive: (kidId: string) => void;
-  removeKid: (kidId: string) => void;
+  kids: KidView[];
+  isLoading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+  addKid: (name: string, age: number) => Promise<KidView>;
+  updateKidInterval: (childId: string, minutes: number) => Promise<void>;
+  updateKidTopics: (childId: string, topics: string[]) => Promise<void>;
+  toggleKidActive: (childId: string) => Promise<void>;
+  removeKid: (childId: string) => Promise<void>;
 }
 
 const KidsContext = createContext<KidsContextType | null>(null);
 
 export function KidsProvider({ children }: { children: React.ReactNode }) {
-  const [kids, setKids] = useState<KidProfile[]>(KIDS);
+  const { isAuthenticated } = useAuth();
+  const [kids, setKids] = useState<KidView[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const addKid = useCallback((name: string, age: number): KidProfile => {
-    const avatarIdx = kids.length % AVATAR_OPTIONS.length;
-    const avatar = AVATAR_OPTIONS[avatarIdx];
-    const newKid: KidProfile = {
-      id: `kid-${Date.now()}`,
-      name,
-      age,
-      avatarEmoji: avatar.emoji,
-      avatarColor: avatar.color,
-      lastActivity: 'No activity yet',
-      peakInterests: [],
-      currentTopicSet: [],
-      intervalMinutes: 30,
-      active: false,
-    };
-    setKids((prev) => [...prev, newKid]);
-    return newKid;
-  }, [kids.length]);
+  const loadKids = useCallback(async () => {
+    if (!isAuthenticated) {
+      setKids([]);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const profiles = await fetchChildren();
+      const kidsWithSchedules = await Promise.all(
+        profiles.map(async (profile) => {
+          try {
+            const schedule = await getSchedule(profile.childId);
+            return toKidView(profile, schedule);
+          } catch {
+            return toKidView(profile, null);
+          }
+        })
+      );
+      setKids(kidsWithSchedules);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load kids';
+      setError(message);
+      setKids([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated]);
 
-  const updateKidInterval = useCallback((kidId: string, minutes: number) => {
+  useEffect(() => {
+    void loadKids();
+  }, [loadKids]);
+
+  const addKid = useCallback(
+    async (name: string, age: number): Promise<KidView> => {
+      const ageGroup = ageToAgeGroup(age);
+      const profile = await createChild({
+        name,
+        ageGroup,
+        learningFocus: ['general'],
+        interests: ['general'],
+      });
+      try {
+        const schedule = await createSchedule(profile.childId, {
+          ...DEFAULT_SCHEDULE,
+          intervalMinutes: 30,
+        });
+        const kidView = toKidView(profile, schedule);
+        setKids((prev) => [...prev, kidView]);
+        return kidView;
+      } catch {
+        const kidView = toKidView(profile, null);
+        setKids((prev) => [...prev, kidView]);
+        return kidView;
+      }
+    },
+    []
+  );
+
+  const updateKidInterval = useCallback(
+    async (childId: string, minutes: number) => {
+      try {
+        const schedule = await getSchedule(childId);
+        await updateSchedule(childId, { intervalMinutes: minutes });
+        setKids((prev) =>
+          prev.map((k) =>
+            k.childId === childId ? { ...k, intervalMinutes: minutes } : k
+          )
+        );
+      } catch {
+        try {
+          await createSchedule(childId, {
+            ...DEFAULT_SCHEDULE,
+            intervalMinutes: minutes,
+          });
+          setKids((prev) =>
+            prev.map((k) =>
+              k.childId === childId ? { ...k, intervalMinutes: minutes } : k
+            )
+          );
+        } catch (err) {
+          throw err;
+        }
+      }
+    },
+    []
+  );
+
+  const updateKidTopics = useCallback(
+    async (childId: string, topics: string[]) => {
+      await updateChild(childId, {
+        learningFocus: topics.length > 0 ? topics : ['general'],
+      });
+      setKids((prev) =>
+        prev.map((k) =>
+          k.childId === childId ? { ...k, learningFocus: topics } : k
+        )
+      );
+    },
+    []
+  );
+
+  const toggleKidActive = useCallback(async (childId: string) => {
+    const kid = kids.find((k) => k.childId === childId);
+    if (!kid) return;
+    const newActive = !kid.isActive;
+    await updateChild(childId, { isActive: newActive });
     setKids((prev) =>
-      prev.map((k) => (k.id === kidId ? { ...k, intervalMinutes: minutes } : k)),
+      prev.map((k) =>
+        k.childId === childId ? { ...k, isActive: newActive } : k
+      )
     );
-  }, []);
+  }, [kids]);
 
-  const updateKidTopics = useCallback((kidId: string, topics: string[]) => {
-    setKids((prev) =>
-      prev.map((k) => (k.id === kidId ? { ...k, currentTopicSet: topics } : k)),
-    );
-  }, []);
-
-  const toggleKidActive = useCallback((kidId: string) => {
-    setKids((prev) =>
-      prev.map((k) => (k.id === kidId ? { ...k, active: !k.active } : k)),
-    );
-  }, []);
-
-  const removeKid = useCallback((kidId: string) => {
-    setKids((prev) => prev.filter((k) => k.id !== kidId));
+  const removeKid = useCallback(async (childId: string) => {
+    try {
+      await deleteSchedule(childId);
+    } catch {
+      // No schedule, ignore
+    }
+    await deleteChild(childId);
+    setKids((prev) => prev.filter((k) => k.childId !== childId));
   }, []);
 
   return (
     <KidsContext.Provider
-      value={{ kids, addKid, updateKidInterval, updateKidTopics, toggleKidActive, removeKid }}
+      value={{
+        kids,
+        isLoading,
+        error,
+        refetch: loadKids,
+        addKid,
+        updateKidInterval,
+        updateKidTopics,
+        toggleKidActive,
+        removeKid,
+      }}
     >
       {children}
     </KidsContext.Provider>

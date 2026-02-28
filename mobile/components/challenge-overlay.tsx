@@ -11,6 +11,7 @@ import {
   StatusBar,
   Text,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -24,11 +25,12 @@ import * as Haptics from 'expo-haptics';
 import { useChallenge } from '@/hooks/use-challenge';
 import { useAuth } from '@/hooks/use-auth';
 import { useAppMode } from '@/contexts/app-mode';
-import { getRandomQuestion, type Question } from '@/lib/questions';
+import { useKids } from '@/contexts/kids';
+import { triggerSession, submitAnswer } from '@/services/sessions';
+import type { Question } from '@/types/children';
 import { stopAlarmSound } from '@/services/alarm-sound';
 import { BlipHead, BlipRobot } from '@/images';
 
-const TOTAL_QUESTIONS = 3;
 const WRONG_ANSWER_DELAY_MS = 700;
 const ALARM_VIBRATION_PATTERN = [0, 800, 400, 800, 400, 800, 400, 800];
 const HAPTIC_INTERVAL_MS = 1200;
@@ -58,27 +60,28 @@ type Phase = 'quiz' | 'success' | 'review';
 export function ChallengeOverlay() {
   const { isChallengeActive, dismissChallenge, pauseNags } = useChallenge();
   const { user } = useAuth();
-  const { mode } = useAppMode();
+  const { mode, childModeKid } = useAppMode();
+  const { kids } = useKids();
   const insets = useSafeAreaInsets();
+  const activeKids = kids.filter((k) => k.isActive);
+  const currentChildId =
+    childModeKid?.childId ?? activeKids[0]?.childId ?? null;
 
-  // Child-mode multi-question state
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
+  // Session-backed state
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [question, setQuestion] = useState<Question | null>(null);
+  const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<Phase>('quiz');
+  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
-
-  // Parent-mode single-question state
-  const [singleQuestion, setSingleQuestion] = useState<Question | null>(null);
-
-  // Shared state
-  const [answer, setAnswer] = useState('');
-  const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shakeX = useSharedValue(0);
   const bgFlash = useSharedValue(0);
+
+  const [answer, setAnswer] = useState('');
+  const [error, setError] = useState('');
 
   const isChildMode = mode === 'child';
   const canShow = isChallengeActive && (user || isChildMode);
@@ -113,29 +116,31 @@ export function ChallengeOverlay() {
     dismissChallenge();
   }, [dismissChallenge]);
 
-  // Initialise questions when challenge starts
+  // Fetch question from API when challenge starts
   useEffect(() => {
-    if (isChallengeActive && (user || isChildMode)) {
-      pauseNags();
-      stopAlarmSound();
+    if (!isChallengeActive || !(user || isChildMode) || !currentChildId) return;
 
-      if (isChildMode) {
-        setQuestions(
-          Array.from({ length: TOTAL_QUESTIONS }, () => getRandomQuestion('medium'))
-        );
-        setCurrentIndex(0);
-        setWrongAnswers([]);
-        setPhase('quiz');
-        setReviewIndex(0);
-        setTransitioning(false);
-      } else {
-        setSingleQuestion(getRandomQuestion('medium'));
-      }
+    pauseNags();
+    stopAlarmSound();
+    setSessionId(null);
+    setQuestion(null);
+    setPhase('quiz');
+    setWrongAnswers([]);
+    setReviewIndex(0);
+    setAnswer('');
+    setError('');
+    setLoading(true);
 
-      setAnswer('');
-      setError('');
-    }
-  }, [isChallengeActive, user, isChildMode, pauseNags]);
+    triggerSession(currentChildId, 'schedule')
+      .then(({ session, question: q }) => {
+        setSessionId(session.sessionId);
+        setQuestion(q);
+      })
+      .catch(() => {
+        setError('Failed to load question. Try again.');
+      })
+      .finally(() => setLoading(false));
+  }, [isChallengeActive, user, isChildMode, currentChildId, pauseNags]);
 
   // Block hardware back button
   useEffect(() => {
@@ -172,73 +177,70 @@ export function ChallengeOverlay() {
     };
   }, []);
 
-  // ── Child-mode helpers ──
+  const handleSubmit = async () => {
+    if (!sessionId || !question || transitioning) return;
 
-  const goToNextOrFinish = (idx: number, wrongs: WrongAnswer[]) => {
-    const nextIdx = idx + 1;
-    if (nextIdx < TOTAL_QUESTIONS) {
-      setCurrentIndex(nextIdx);
-      setAnswer('');
-    } else if (wrongs.length === 0) {
-      stopAlarmSound();
-      const msg = ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
-      setSuccessMessage(msg);
-      setPhase('success');
-      successTimerRef.current = setTimeout(finishDismiss, 2000);
-    } else {
-      setReviewIndex(0);
-      setPhase('review');
-    }
-  };
+    setTransitioning(true);
+    setError('');
 
-  const handleSubmit = () => {
-    // ── Child mode: 3-question flow ──
-    if (isChildMode) {
-      if (transitioning) return;
-      const currentQ = questions[currentIndex];
-      if (!currentQ) return;
+    try {
+      const result = await submitAnswer(
+        sessionId,
+        question.questionId,
+        answer.trim()
+      );
 
-      const normalized = answer.trim().toLowerCase();
-      const expected = currentQ.answer.trim().toLowerCase();
-
-      if (normalized === expected) {
+      if (result.result === 'correct' && result.sessionComplete) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        goToNextOrFinish(currentIndex, wrongAnswers);
-      } else {
+        stopAlarmSound();
+        const msg =
+          ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+        setSuccessMessage(msg);
+        setPhase('success');
+        successTimerRef.current = setTimeout(finishDismiss, 2000);
+        return;
+      }
+
+      if (result.result === 'incorrect') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         shake();
         flashRed();
-        setTransitioning(true);
         const newWrong: WrongAnswer[] = [
           ...wrongAnswers,
           {
-            questionIndex: currentIndex,
-            question: currentQ.question,
-            correctAnswer: currentQ.answer,
+            questionIndex: wrongAnswers.length,
+            question: question.questionText,
+            correctAnswer: question.correctAnswer,
           },
         ];
         setWrongAnswers(newWrong);
-        setTimeout(() => {
-          setTransitioning(false);
-          goToNextOrFinish(currentIndex, newWrong);
-        }, WRONG_ANSWER_DELAY_MS);
+        if (result.nextQuestion) {
+          setQuestion(result.nextQuestion);
+          setAnswer('');
+        } else {
+          setError('Wrong answer. Try again!');
+        }
+        return;
       }
-      return;
-    }
 
-    // ── Parent mode: single question, retry until correct ──
-    if (!singleQuestion) return;
-    const normalized = answer.trim().toLowerCase();
-    const expected = singleQuestion.answer.trim().toLowerCase();
-
-    if (normalized === expected) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      dismissChallenge();
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      shake();
-      flashRed();
-      setError('Wrong answer. Try again!');
+      if (result.result === 'locked') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        const newWrong: WrongAnswer[] = [
+          ...wrongAnswers,
+          {
+            questionIndex: wrongAnswers.length,
+            question: question.questionText,
+            correctAnswer: question.correctAnswer,
+          },
+        ];
+        setWrongAnswers(newWrong);
+        setReviewIndex(0);
+        setPhase('review');
+      }
+    } catch {
+      setError('Failed to submit. Try again.');
+    } finally {
+      setTransitioning(false);
     }
   };
 
@@ -255,7 +257,32 @@ export function ChallengeOverlay() {
 
   if (!canShow) return null;
 
-  // ── Success screen (all 3 correct) ──
+  if (!currentChildId) {
+    return (
+      <View
+        style={[
+          styles.overlay,
+          { paddingTop: insets.top, paddingBottom: insets.bottom },
+        ]}
+        pointerEvents="auto"
+      >
+        <StatusBar hidden />
+        <Text style={styles.title}>No child selected</Text>
+        <Text style={styles.subtitle}>
+          Add and activate a kid in Settings to start challenges.
+        </Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={finishDismiss}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.buttonText}>Dismiss</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ── Success screen ──
   if (phase === 'success' && isChildMode) {
     return (
       <View
@@ -324,9 +351,50 @@ export function ChallengeOverlay() {
     );
   }
 
-  // ── Quiz screen ──
-  const displayQuestion = isChildMode ? questions[currentIndex] : singleQuestion;
+  // ── Loading ──
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.overlay,
+          { paddingTop: insets.top, paddingBottom: insets.bottom },
+        ]}
+        pointerEvents="auto"
+      >
+        <StatusBar hidden />
+        <ActivityIndicator size="large" color={DARK_OLIVE} />
+        <Text style={[styles.subtitle, { marginTop: 16 }]}>
+          Loading question...
+        </Text>
+      </View>
+    );
+  }
 
+  // ── Error (no question loaded) ──
+  if (!question && error) {
+    return (
+      <View
+        style={[
+          styles.overlay,
+          { paddingTop: insets.top, paddingBottom: insets.bottom },
+        ]}
+        pointerEvents="auto"
+      >
+        <StatusBar hidden />
+        <Text style={styles.title}>Oops</Text>
+        <Text style={[styles.subtitle, { marginBottom: 24 }]}>{error}</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={finishDismiss}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.buttonText}>Dismiss</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ── Quiz screen ──
   return (
     <Animated.View
       style={[
@@ -343,32 +411,17 @@ export function ChallengeOverlay() {
       >
         <Image source={BlipHead} style={styles.mascot} resizeMode="contain" />
 
-        {isChildMode && (
-          <View style={styles.progressRow}>
-            {Array.from({ length: TOTAL_QUESTIONS }, (_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.progressDot,
-                  i < currentIndex && styles.progressDotDone,
-                  i === currentIndex && styles.progressDotCurrent,
-                ]}
-              />
-            ))}
-          </View>
-        )}
-
         <Text style={styles.title}>Answer to continue</Text>
         <Text style={styles.subtitle}>
           {isChildMode
-            ? `Question ${currentIndex + 1} of ${TOTAL_QUESTIONS}`
+            ? 'Solve this to unlock your screen'
             : 'Solve this to unlock your screen'}
         </Text>
 
-        {displayQuestion && (
+        {question && (
           <View style={styles.questionCard}>
             <Text style={styles.questionLabel}>QUESTION</Text>
-            <Text style={styles.questionText}>{displayQuestion.question}</Text>
+            <Text style={styles.questionText}>{question.questionText}</Text>
           </View>
         )}
 

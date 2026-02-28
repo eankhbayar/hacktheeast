@@ -80,6 +80,26 @@ export interface Question {
   createdAt: string;
 }
 
+// ─── Progress Record ──────────────────────────────────────────────────────────
+
+export interface TopicScore {
+  correct: number;
+  incorrect: number;
+}
+
+export interface ProgressRecord {
+  recordId: string;
+  childId: string;
+  date: string;
+  totalQuestions: number;
+  correctAnswers: number;
+  incorrectAnswers: number;
+  sessionsCompleted: number;
+  sessionsLockedOut: number;
+  topicBreakdown: Record<string, TopicScore>;
+  timeSpentSeconds: number;
+}
+
 // ─── Lesson (Remedial Video) ──────────────────────────────────────────────────
 
 export interface Lesson {
@@ -132,3 +152,41 @@ export interface KidView {
   /** Derived client-side for display (not stored in backend). */
   avatarColor: string;
 }
+
+// ─── Adapter ──────────────────────────────────────────────────────────────────
+
+const AVATAR_OPTIONS: { emoji: string; color: string }[] = [
+  { emoji: '👧', color: '#F8BBD0' },
+  { emoji: '👦', color: '#B3E5FC' },
+  { emoji: '👶', color: '#C8E6C9' },
+  { emoji: '🧒', color: '#FFE0B2' },
+  { emoji: '👱', color: '#D1C4E9' },
+  { emoji: '🧒', color: '#FFCCBC' },
+];
+
+/** Derive stable avatar from childId. */
+function getAvatarForChild(childId: string): { emoji: string; color: string } {
+  let hash = 0;
+  for (let i = 0; i < childId.length; i++) {
+    hash = (hash << 5) - hash + childId.charCodeAt(i);
+    hash |= 0;
+  }
+  const idx = Math.abs(hash) % AVATAR_OPTIONS.length;
+  return AVATAR_OPTIONS[idx];
+}
+
+/** Convert ChildProfile + optional Schedule to KidView for UI. */
+export function toKidView(
+  profile: ChildProfile,
+  schedule?: Schedule | null
+): KidView {
+  const avatar = getAvatarForChild(profile.childId);
+  return {
+    ...profile,
+    intervalMinutes: schedule?.intervalMinutes ?? 30,
+    avatarEmoji: avatar.emoji,
+    avatarColor: avatar.color,
+  };
+}
+
+export { AVATAR_OPTIONS };

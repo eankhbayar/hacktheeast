@@ -11,11 +11,12 @@ import {
   Modal,
   Pressable,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useKids } from '@/contexts/kids';
 import { KidProfileModal } from '@/components/kid-profile-modal';
-import type { KidProfile } from '@/data/kids';
+import type { KidView } from '@/types/children';
 import { BlipHead } from '@/images';
 
 const YELLOW = '#FFD600';
@@ -25,11 +26,19 @@ const WHITE = '#FFFFFF';
 const ACCENT_RED = '#D32F2F';
 
 export default function SettingsScreen() {
-  const { kids, addKid, removeKid, updateKidInterval, updateKidTopics, toggleKidActive } = useKids();
+  const {
+    kids,
+    isLoading,
+    addKid,
+    removeKid,
+    updateKidInterval,
+    updateKidTopics,
+    toggleKidActive,
+  } = useKids();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
-  const [selectedKid, setSelectedKid] = useState<KidProfile | null>(null);
+  const [selectedKid, setSelectedKid] = useState<KidView | null>(null);
 
   const handleUpdateInterval = (kidId: string, minutes: number) => {
     updateKidInterval(kidId, minutes);
@@ -45,7 +54,7 @@ export default function SettingsScreen() {
     setAge('');
   };
 
-  const handleAddKid = () => {
+  const handleAddKid = async () => {
     const trimmedName = name.trim();
     const parsedAge = parseInt(age, 10);
     if (!trimmedName) {
@@ -56,25 +65,40 @@ export default function SettingsScreen() {
       Alert.alert('Invalid age', 'Please enter an age between 1 and 18.');
       return;
     }
-    addKid(trimmedName, parsedAge);
-    closeForm();
+    try {
+      await addKid(trimmedName, parsedAge);
+      closeForm();
+    } catch (err) {
+      Alert.alert(
+        'Error',
+        err instanceof Error ? err.message : 'Failed to add child'
+      );
+    }
   };
 
-  const handleRemoveKid = (kidId: string, kidName: string) => {
+  const handleRemoveKid = (childId: string, kidName: string) => {
     Alert.alert(
       'Remove Profile',
       `Are you sure you want to remove ${kidName}'s profile?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => removeKid(kidId) },
-      ],
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => void removeKid(childId),
+        },
+      ]
     );
   };
 
   return (
     <>
       <KidProfileModal
-        kid={selectedKid ? kids.find((k) => k.id === selectedKid.id) ?? selectedKid : null}
+        kid={
+          selectedKid
+            ? kids.find((k) => k.childId === selectedKid.childId) ?? selectedKid
+            : null
+        }
         visible={!!selectedKid}
         onClose={() => setSelectedKid(null)}
         onUpdateInterval={handleUpdateInterval}
@@ -142,10 +166,19 @@ export default function SettingsScreen() {
         {/* Existing Profiles */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Kid Profiles</Text>
+          {isLoading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="small" color={DARK_OLIVE} />
+              <Text style={[styles.emptyText, { marginTop: 12 }]}>
+                Loading profiles...
+              </Text>
+            </View>
+          ) : (
+            <>
           {kids.map((kid) => (
             <TouchableOpacity
-              key={kid.id}
-              style={[styles.kidRow, !kid.active && styles.kidRowInactive]}
+              key={kid.childId}
+              style={[styles.kidRow, !kid.isActive && styles.kidRowInactive]}
               activeOpacity={0.7}
               onPress={() => setSelectedKid(kid)}
             >
@@ -155,18 +188,19 @@ export default function SettingsScreen() {
               <View style={styles.kidInfo}>
                 <Text style={styles.kidName}>{kid.name}</Text>
                 <Text style={styles.kidMeta}>
-                  Age {kid.age} · {kid.intervalMinutes} min · {kid.active ? 'Active' : 'Paused'}
+                  Ages {kid.ageGroup} · {kid.intervalMinutes} min ·{' '}
+                  {kid.isActive ? 'Active' : 'Paused'}
                 </Text>
               </View>
               <Switch
-                value={kid.active}
-                onValueChange={() => toggleKidActive(kid.id)}
+                value={kid.isActive}
+                onValueChange={() => void toggleKidActive(kid.childId)}
                 trackColor={{ false: '#E0E0E0', true: '#A8D800' }}
                 thumbColor={WHITE}
                 style={styles.toggle}
               />
               <TouchableOpacity
-                onPress={() => handleRemoveKid(kid.id, kid.name)}
+                onPress={() => handleRemoveKid(kid.childId, kid.name)}
                 style={styles.removeBtn}
                 activeOpacity={0.7}
               >
@@ -179,6 +213,8 @@ export default function SettingsScreen() {
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No profiles yet. Add a kid to get started.</Text>
             </View>
+          )}
+            </>
           )}
         </View>
 

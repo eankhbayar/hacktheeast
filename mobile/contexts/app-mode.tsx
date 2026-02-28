@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import type { KidProfile } from '@/data/kids';
+import type { KidView } from '@/types/children';
 
 type AppMode = 'parent' | 'child';
 
 interface AppModeContextType {
   mode: AppMode;
-  childModeKid: KidProfile | null;
-  enterChildMode: (kid: KidProfile) => void;
+  childModeKid: KidView | null;
+  enterChildMode: (kid: KidView) => void;
   exitChildMode: () => void;
 }
 
@@ -14,9 +14,9 @@ const AppModeContext = createContext<AppModeContextType | null>(null);
 
 export function AppModeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<AppMode>('parent');
-  const [childModeKid, setChildModeKid] = useState<KidProfile | null>(null);
+  const [childModeKid, setChildModeKid] = useState<KidView | null>(null);
 
-  const enterChildMode = useCallback((kid: KidProfile) => {
+  const enterChildMode = useCallback((kid: KidView) => {
     setChildModeKid(kid);
     setMode('child');
   }, []);
