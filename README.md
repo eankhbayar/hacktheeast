@@ -11,10 +11,15 @@
 ## Team Members & Roles
 
 Khuslen Sansar | UI Designer, Pitch Deck
+
 Ankhbayar Enkhtaivan | Developer
+
 Aswad Mohammed Tariq | Developer
+
 Alua Niyazova | Developer
+
 Alikhan Nurgazy | Developer
+
 Almas Bekbolat | UI Designer, Developer
 
 ## Setup Instructions
