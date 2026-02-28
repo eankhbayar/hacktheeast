@@ -1,0 +1,11 @@
+langgraph>=0.2
+langchain-core>=0.3
+langchain-exa>=0.2
+anthropic>=0.40
+boto3>=1.35
+pydantic>=2.0
+pydantic-settings>=2.0
+bedrock-agentcore>=1.0
+python-dotenv>=1.0
+moto[s3]>=5.0
+pytest>=8.0
