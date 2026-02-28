@@ -4,16 +4,18 @@ import { Tabs, useRouter } from 'expo-router';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/hooks/use-auth';
+import { useAppMode } from '@/contexts/app-mode';
 
 export default function TabLayout() {
   const { user, isLoading } = useAuth();
+  const { mode } = useAppMode();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isLoading && !user && mode !== 'child') {
       router.replace('/(auth)/login');
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, router, mode]);
 
   return (
     <Tabs

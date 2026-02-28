@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { AlarmPermissionModal } from '@/components/alarm-permission-modal';
+import { useAppMode } from '@/contexts/app-mode';
 import { useKids } from '@/contexts/kids';
 import { useAuth } from '@/hooks/use-auth';
 import { useChallenge } from '@/hooks/use-challenge';
@@ -26,6 +27,7 @@ const ACCENT_RED = '#D32F2F';
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
+  const { enterChildMode } = useAppMode();
   const { kids } = useKids();
   const {
     minutesUntilNext,
@@ -64,6 +66,14 @@ export default function HomeScreen() {
   const handleLogout = async () => {
     await logout();
     router.replace('/(auth)/login');
+  };
+
+  const handleChildMode = async () => {
+    const kid = activeKids[0];
+    if (!kid) return;
+    enterChildMode(kid);
+    router.replace('/child-mode');
+    logout();
   };
 
   const firstName = user?.fullName?.split(' ')[0] ?? '';
@@ -132,6 +142,16 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <Text style={styles.testBtnText}>Test Challenge Now</Text>
+          </TouchableOpacity>
+
+          {/* Child Mode Button */}
+          <TouchableOpacity
+            style={[styles.childModeBtn, activeKids.length === 0 && styles.childModeBtnDisabled]}
+            onPress={handleChildMode}
+            activeOpacity={0.8}
+            disabled={activeKids.length === 0}
+          >
+            <Text style={styles.childModeBtnText}>Child Mode</Text>
           </TouchableOpacity>
 
           {/* Sign Out */}
@@ -292,6 +312,28 @@ const styles = StyleSheet.create({
   },
   testBtnText: {
     color: YELLOW,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // Child Mode Button
+  childModeBtn: {
+    backgroundColor: '#FF9800',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  childModeBtnDisabled: {
+    opacity: 0.4,
+  },
+  childModeBtnText: {
+    color: WHITE,
     fontSize: 16,
     fontWeight: '700',
   },
