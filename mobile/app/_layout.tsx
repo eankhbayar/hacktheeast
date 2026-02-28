@@ -8,6 +8,7 @@ import { ChallengeOverlay } from '@/components/challenge-overlay';
 import { configureAlarmKit } from '@/services/alarm-kit';
 import { AuthProvider } from '@/contexts/auth';
 import { ChallengeProvider } from '@/contexts/challenge';
+import { KidsProvider } from '@/contexts/kids';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function RootLayout() {
@@ -20,6 +21,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
+        <KidsProvider>
         <ChallengeProvider>
           <Stack initialRouteName="index">
             <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -30,6 +32,7 @@ export default function RootLayout() {
           <ChallengeOverlay />
           <StatusBar style="auto" />
         </ChallengeProvider>
+        </KidsProvider>
       </AuthProvider>
     </ThemeProvider>
   );
