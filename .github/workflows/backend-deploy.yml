@@ -62,7 +62,7 @@ jobs:
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
         run: |
           mkdir -p ~/.ssh
-          echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key.pem
+          echo "$EC2_SSH_KEY" | base64 -d > ~/.ssh/deploy_key.pem
           chmod 600 ~/.ssh/deploy_key.pem
           ssh -i ~/.ssh/deploy_key.pem -o StrictHostKeyChecking=no ec2-user@$EC2_HOST "\
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY && \
