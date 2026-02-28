@@ -8,6 +8,12 @@ import {
 
 export const CHALLENGE_DUE_ID = 'challenge-due';
 const CHALLENGE_CHANNEL_ID = 'challenge-alarm';
+const NAG_CHANNEL_ID = 'challenge-nag';
+
+// iOS notification sounds play up to 30 seconds. A new notification fires
+// every 30 seconds so the alarm sound restarts seamlessly.
+const ALARM_SOUND_DURATION_SECONDS = 30;
+const NAG_COUNT = 60;
 
 function isChallengeDueNotification(
   data: Record<string, unknown> | undefined
@@ -59,7 +65,32 @@ export async function setupNotificationChannel(): Promise<void> {
       sound: 'alarm.mp3',
       enableVibrate: true,
     });
+    await Notifications.setNotificationChannelAsync(NAG_CHANNEL_ID, {
+      name: 'Challenge Reminder',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 800, 400, 800, 400, 800],
+      sound: 'alarm.mp3',
+      enableVibrate: true,
+    });
   }
+}
+
+function alarmNotificationContent(
+  title: string,
+  body: string
+): Notifications.NotificationContentInput {
+  return {
+    title,
+    body,
+    data: { type: 'challenge-due' },
+    sound: 'alarm.mp3',
+    priority: Notifications.AndroidNotificationPriority.MAX,
+    ...(Platform.OS === 'ios' && { interruptionLevel: 'critical' }),
+    ...(Platform.OS === 'android' && {
+      channelId: CHALLENGE_CHANNEL_ID,
+      vibrate: [0, 800, 400, 800, 400, 800],
+    }),
+  };
 }
 
 export async function scheduleChallengeNotification(nextAt: number): Promise<void> {
@@ -126,4 +157,30 @@ export function addChallengeNotificationListener(
     subReceived.remove();
     subResponse.remove();
   };
+}
+
+export async function scheduleNagNotifications(): Promise<void> {
+  const hasPermission = await requestNotificationPermissions();
+  if (!hasPermission) return;
+
+  await setupNotificationChannel();
+
+  for (let i = 1; i <= NAG_COUNT; i++) {
+    await Notifications.scheduleNotificationAsync({
+      content: alarmNotificationContent(
+        'Answer your challenge!',
+        'You must solve the challenge to continue.'
+      ),
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: i * ALARM_SOUND_DURATION_SECONDS,
+        repeats: false,
+        ...(Platform.OS === 'android' && { channelId: NAG_CHANNEL_ID }),
+      },
+    });
+  }
+}
+
+export async function cancelNagNotifications(): Promise<void> {
+  await Notifications.cancelAllScheduledNotificationsAsync();
 }

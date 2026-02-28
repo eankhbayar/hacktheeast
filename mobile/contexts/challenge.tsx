@@ -14,6 +14,8 @@ import {
   scheduleChallengeNotification,
   cancelChallengeNotification,
   addChallengeNotificationListener,
+  scheduleNagNotifications,
+  cancelNagNotifications,
 } from '@/services/notifications';
 import { startAlarmSound, stopAlarmSound } from '@/services/alarm-sound';
 import { checkLaunchPayload } from '@/services/alarm-kit';
@@ -43,6 +45,7 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
   const [nextChallengeAt, setNextChallengeAt] = useState<number | null>(null);
   const [intervalMinutes, setIntervalMinutesState] = useState(DEFAULT_INTERVAL_MINUTES);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nagRescheduleRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
   const activateChallenge = useCallback(() => {
@@ -94,7 +97,12 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
   const dismissChallenge = useCallback(async () => {
     setIsChallengeActive(false);
     await AsyncStorage.setItem(STORAGE_KEYS.IS_ACTIVE, 'false');
+    if (nagRescheduleRef.current) {
+      clearInterval(nagRescheduleRef.current);
+      nagRescheduleRef.current = null;
+    }
     await stopAlarmSound();
+    await cancelNagNotifications();
     await cancelChallengeNotification();
     const nextAt = Date.now() + intervalMinutes * 60 * 1000;
     await persistAndSchedule(nextAt);
@@ -202,11 +210,26 @@ export function ChallengeProvider({ children }: { children: React.ReactNode }) {
     return remove;
   }, [activateChallenge]);
 
-  // Cancel the pending alarm once the challenge is active in-app
+  // When challenge is active, cancel the original alarm and start nagging
+  // via repeated critical notifications every 30 seconds.
   useEffect(() => {
-    if (isChallengeActive) {
-      cancelChallengeNotification();
-    }
+    if (!isChallengeActive) return;
+
+    cancelChallengeNotification();
+    cancelNagNotifications().then(() => scheduleNagNotifications());
+
+    const RESCHEDULE_MS = 25 * 60 * 1000;
+    nagRescheduleRef.current = setInterval(() => {
+      cancelNagNotifications().then(() => scheduleNagNotifications());
+    }, RESCHEDULE_MS);
+
+    return () => {
+      if (nagRescheduleRef.current) {
+        clearInterval(nagRescheduleRef.current);
+        nagRescheduleRef.current = null;
+      }
+      cancelNagNotifications();
+    };
   }, [isChallengeActive]);
 
   return (
