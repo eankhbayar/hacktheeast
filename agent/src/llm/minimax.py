@@ -50,7 +50,10 @@ def generate(system_prompt: str, user_prompt: str) -> dict[str, Any]:
                 messages=[{"role": "user", "content": user_prompt}],
             )
 
-            text = message.content[0].text
+            text = next(
+                block.text for block in message.content
+                if hasattr(block, "text")
+            )
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1]
