@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     anthropic_base_url: str = "https://api.minimax.io/anthropic"
     minimax_model: str = "MiniMax-M2.5-highspeed"
     minimax_max_tokens: int = 4096
-    minimax_timeout_seconds: float = 8.0
+    minimax_timeout_seconds: float = 60.0
     secrets_manager_name: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
