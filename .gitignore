@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Backend
+backend/dist/
+backend/.env
+
+# Mobile
+mobile/.expo/
+mobile/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
