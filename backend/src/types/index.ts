@@ -180,3 +180,20 @@ export interface JwtPayload {
   iat?: number;
   exp?: number;
 }
+
+// ─── Agent (Bedrock AgentCore) ──────────────────────────────────────────────
+
+export interface AgentRequest {
+  childId: string;
+  ageGroup: '6-8' | '9-12' | '13-15';
+  interests?: string;
+  learningObjectives?: string[];
+  requestType: 'lesson' | 'report';
+}
+
+export interface AgentResponse {
+  status: 'success' | 'partial_success' | 'error';
+  data?: Record<string, unknown>;
+  message?: string;
+  warning?: string;
+}

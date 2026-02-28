@@ -1,0 +1,125 @@
+name: Agent Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'agent/**'
+      - '.github/workflows/agent-deploy.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-agent:
+    runs-on: ubuntu-latest
+    environment: main
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Package arm64 dependencies
+        working-directory: agent
+        run: |
+          uv pip install \
+            --python-platform aarch64-manylinux2014 \
+            --python-version 3.12 \
+            --target=deployment_package \
+            --only-binary=:all: \
+            -r requirements.txt
+
+      - name: Create deployment ZIP
+        working-directory: agent
+        run: |
+          cp -r src/* deployment_package/
+          cd deployment_package
+          zip -r ../deployment_package.zip .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Upload to S3
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          BUCKET="bedrock-agentcore-code-${AWS_ACCOUNT_ID}-${AWS_REGION}"
+          aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null || \
+            aws s3api create-bucket --bucket "$BUCKET" --region "$AWS_REGION"
+          aws s3 cp agent/deployment_package.zip \
+            "s3://${BUCKET}/learning-agent/deployment_package.zip"
+
+      - name: Create or Update AgentCore Runtime
+        env:
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AGENT_RUNTIME_ID: ${{ secrets.AGENT_RUNTIME_ID }}
+          AGENT_ROLE_ARN: ${{ secrets.AGENT_ROLE_ARN }}
+        run: |
+          BUCKET="bedrock-agentcore-code-${AWS_ACCOUNT_ID}-${AWS_REGION}"
+
+          if [ -z "$AGENT_RUNTIME_ID" ]; then
+            echo "Creating new AgentCore Runtime..."
+            RESPONSE=$(aws bedrock-agentcore-control create-agent-runtime \
+              --agent-runtime-name learning-agent \
+              --agent-runtime-artifact "{
+                \"codeConfiguration\": {
+                  \"code\": {
+                    \"s3\": {
+                      \"bucket\": \"${BUCKET}\",
+                      \"prefix\": \"learning-agent/deployment_package.zip\"
+                    }
+                  },
+                  \"runtime\": \"PYTHON_3_12\",
+                  \"entryPoint\": [\"src/entrypoint.py\"]
+                }
+              }" \
+              --network-configuration '{"networkMode": "PUBLIC"}' \
+              --role-arn "$AGENT_ROLE_ARN" \
+              --environment-variables "{
+                \"SECRETS_MANAGER_NAME\": \"learning-agent-secrets\",
+                \"S3_BUCKET_NAME\": \"learning-system-data\",
+                \"AWS_REGION\": \"${AWS_REGION}\"
+              }" \
+              --output json)
+
+            RUNTIME_ARN=$(echo "$RESPONSE" | jq -r '.agentRuntimeArn')
+            RUNTIME_ID=$(echo "$RESPONSE" | jq -r '.agentRuntimeId')
+            echo "Created Runtime: $RUNTIME_ARN (ID: $RUNTIME_ID)"
+            echo "IMPORTANT: Add these GitHub secrets:"
+            echo "  AGENT_RUNTIME_ID=$RUNTIME_ID"
+            echo "  AGENT_RUNTIME_ARN=$RUNTIME_ARN"
+
+            echo "Creating endpoint..."
+            aws bedrock-agentcore-control create-agent-runtime-endpoint \
+              --agent-runtime-id "$RUNTIME_ID" \
+              --name learning-agent-endpoint
+          else
+            echo "Updating existing AgentCore Runtime: $AGENT_RUNTIME_ID"
+            aws bedrock-agentcore-control update-agent-runtime \
+              --agent-runtime-id "$AGENT_RUNTIME_ID" \
+              --agent-runtime-artifact "{
+                \"codeConfiguration\": {
+                  \"code\": {
+                    \"s3\": {
+                      \"bucket\": \"${BUCKET}\",
+                      \"prefix\": \"learning-agent/deployment_package.zip\"
+                    }
+                  },
+                  \"runtime\": \"PYTHON_3_12\",
+                  \"entryPoint\": [\"src/entrypoint.py\"]
+                }
+              }" \
+              --network-configuration '{"networkMode": "PUBLIC"}' \
+              --role-arn "$AGENT_ROLE_ARN"
+          fi

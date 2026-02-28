@@ -60,6 +60,7 @@ jobs:
           DYNAMODB_TABLE_PREFIX: ${{ secrets.DYNAMODB_TABLE_PREFIX }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          AGENT_RUNTIME_ARN: ${{ secrets.AGENT_RUNTIME_ARN }}
         run: |
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" | base64 -d > ~/.ssh/deploy_key.pem
@@ -75,4 +76,5 @@ jobs:
               -e DYNAMODB_TABLE_PREFIX=$DYNAMODB_TABLE_PREFIX \
               -e JWT_SECRET='$JWT_SECRET' \
               -e JWT_REFRESH_SECRET='$JWT_REFRESH_SECRET' \
+              -e AGENT_RUNTIME_ARN='$AGENT_RUNTIME_ARN' \
               $ECR_REGISTRY/$ECR_REPOSITORY:latest"

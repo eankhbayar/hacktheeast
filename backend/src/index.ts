@@ -8,6 +8,7 @@ import schedulesRoutes from './routes/schedules';
 import sessionsRoutes from './routes/sessions';
 import dashboardRoutes from './routes/dashboard';
 import notificationsRoutes from './routes/notifications';
+import agentRoutes from './routes/agent';
 import { ensureTablesExist } from './config/dynamodb';
 
 dotenv.config();
@@ -28,6 +29,7 @@ app.use('/children', childrenRoutes);
 app.use('/sessions', sessionsRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/notifications', notificationsRoutes);
+app.use('/agent', agentRoutes);
 
 async function start() {
   await ensureTablesExist();
